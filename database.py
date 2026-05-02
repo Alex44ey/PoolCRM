@@ -1,5 +1,5 @@
 # PoolCRM/database.py
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Float, Boolean, Date, Time, DateTime, Enum
+from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Float, Boolean, Date, Time, DateTime, Enum as SQLEnum, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, Session
 from datetime import datetime
@@ -16,12 +16,10 @@ Base = declarative_base()
 
 
 # ========== ПЕРЕЧИСЛЕНИЯ (ENUMS) ==========
-
 class UserRole(str, enum.Enum):
     PARENT = "parent"
     COACH = "coach"
     ADMIN = "admin"
-
 
 class EnrollmentStatus(str, enum.Enum):
     ACTIVE = "active"          # ходит
@@ -29,12 +27,10 @@ class EnrollmentStatus(str, enum.Enum):
     COMPLETED = "completed"    # переведён/откреплён
     WAITING_LIST = "waiting_list"  # в листе ожидания
 
-
 class TrainingStatus(str, enum.Enum):
     SCHEDULED = "scheduled"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
-
 
 class AttendanceStatus(str, enum.Enum):
     PRESENT = "present"
@@ -43,26 +39,24 @@ class AttendanceStatus(str, enum.Enum):
     ABSENT_NO_REASON = "absent_no_reason"
     FROZEN_SKIP = "frozen_skip"
 
-
 class ApplicationStatus(str, enum.Enum):
-    PENDING_PARENT_VERIFICATION = "pending_parent_verification"  # ждёт подтверждения email
-    NEW = "new"                      # новая, видна админу
-    ON_REVIEW = "on_review"          # на рассмотрении
-    APPROVED = "approved"            # одобрена
-    REJECTED = "rejected"            # отклонена
-    WAITING_LIST = "waiting_list"    # в листе ожидания
-
+    PENDING_PARENT_VERIFICATION = "pending_parent_verification"
+    NEW = "new"
+    ON_REVIEW = "on_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    WAITING_LIST = "waiting_list"
 
 # ========== ТАБЛИЦА РОДИТЕЛЕЙ ==========
 class ParentDB(Base):
     __tablename__ = "parents"
 
     id = Column(Integer, primary_key=True, index=True)
-    role = Column(String, default="parent")
+    role = Column(SQLEnum(UserRole), default=UserRole.PARENT)
     name = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False, index=True)
     phone = Column(String)
-    password = Column(String, nullable=False)  # в реальном проекте — хэш
+    password = Column(String, nullable=False)
 
     # VK
     is_vk_linked = Column(Boolean, default=False)
@@ -80,7 +74,7 @@ class ParentDB(Base):
     # Связи
     children = relationship("ChildDB", back_populates="parent", cascade="all, delete-orphan")
     applications = relationship("ApplicationDB", back_populates="parent")
-
+    notifications = relationship("NotificationDB", back_populates="parent")
 
 # ========== ТАБЛИЦА ДЕТЕЙ ==========
 class ChildDB(Base):
@@ -90,17 +84,18 @@ class ChildDB(Base):
     parent_id = Column(Integer, ForeignKey("parents.id"), nullable=False)
     name = Column(String, nullable=False)
     birthdate = Column(Date, nullable=False)
-    class_num = Column(Integer)             # класс в школе
-    study_year = Column(Integer)            # год обучения плаванию (уровень)
-    medical_note = Column(String)           # данные мед. справки
-    medical_date = Column(Date)             # дата выдачи справки
+    class_num = Column(Integer)
+    study_year = Column(Integer)
+    medical_note = Column(String)
+    medical_date = Column(Date)
     is_active = Column(Boolean, default=True)
 
     # Связи
     parent = relationship("ParentDB", back_populates="children")
     enrollments = relationship("EnrollmentDB", back_populates="child")
     attendances = relationship("AttendanceDB", back_populates="child")
-
+    transfer_history = relationship("TransferHistoryDB", back_populates="child")
+    transfer_requests = relationship("TransferRequestDB", back_populates="child")
 
 # ========== ТАБЛИЦА ТРЕНЕРОВ ==========
 class CoachDB(Base):
@@ -116,8 +111,7 @@ class CoachDB(Base):
 
     # Связи
     groups = relationship("GroupDB", back_populates="coach")
-    child_notes = relationship("CoachNoteDB", back_populates="coach")
-
+    transfer_requests = relationship("TransferRequestDB", back_populates="coach")
 
 # ========== ТАБЛИЦА ГРУПП ==========
 class GroupDB(Base):
@@ -125,12 +119,11 @@ class GroupDB(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    level = Column(Integer, nullable=False)         # год обучения
+    level = Column(Integer, nullable=False)
     coach_id = Column(Integer, ForeignKey("coaches.id"))
     max_capacity = Column(Integer, default=12)
-    age_tolerance = Column(Float, default=1.0)      # ± лет от нормы
+    age_tolerance = Column(Float, default=1.0)
     is_active = Column(Boolean, default=True)
-    note = Column(String)
     created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
 
     # Связи
@@ -139,7 +132,10 @@ class GroupDB(Base):
     enrollments = relationship("EnrollmentDB", back_populates="group")
     trainings = relationship("TrainingDB", back_populates="group")
     applications = relationship("ApplicationDB", back_populates="group")
-
+    transfer_history_from = relationship("TransferHistoryDB", foreign_keys="TransferHistoryDB.from_group_id", back_populates="from_group")
+    transfer_history_to = relationship("TransferHistoryDB", foreign_keys="TransferHistoryDB.to_group_id", back_populates="to_group")
+    transfer_requests_from = relationship("TransferRequestDB", foreign_keys="TransferRequestDB.from_group_id", back_populates="from_group")
+    transfer_requests_to = relationship("TransferRequestDB", foreign_keys="TransferRequestDB.suggested_group_id", back_populates="suggested_group")
 
 # ========== ТАБЛИЦА ВРЕМЕННЫХ СЛОТОВ ==========
 class TimeSlotDB(Base):
@@ -147,14 +143,17 @@ class TimeSlotDB(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
-    day_of_week = Column(Integer, nullable=False)   # 0-6 (Пн-Вс)
+    day_of_week = Column(Integer, nullable=False)
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint('group_id', 'day_of_week', 'start_time', name='uq_group_day_time'),
+    )
 
     # Связи
     group = relationship("GroupDB", back_populates="time_slots")
     trainings = relationship("TrainingDB", back_populates="time_slot")
-
 
 # ========== ТАБЛИЦА ТРЕНИРОВОК ==========
 class TrainingDB(Base):
@@ -166,13 +165,12 @@ class TrainingDB(Base):
     date = Column(Date, nullable=False)
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
-    status = Column(Enum(TrainingStatus), default=TrainingStatus.SCHEDULED)
+    status = Column(SQLEnum(TrainingStatus), default=TrainingStatus.SCHEDULED)
 
     # Связи
     group = relationship("GroupDB", back_populates="trainings")
     time_slot = relationship("TimeSlotDB", back_populates="trainings")
     attendances = relationship("AttendanceDB", back_populates="training")
-
 
 # ========== ТАБЛИЦА ЗАЧИСЛЕНИЙ ==========
 class EnrollmentDB(Base):
@@ -181,7 +179,7 @@ class EnrollmentDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     child_id = Column(Integer, ForeignKey("children.id"), nullable=False)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
-    status = Column(Enum(EnrollmentStatus), default=EnrollmentStatus.ACTIVE)
+    status = Column(SQLEnum(EnrollmentStatus), default=EnrollmentStatus.ACTIVE)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=True)
     created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
@@ -190,7 +188,6 @@ class EnrollmentDB(Base):
     child = relationship("ChildDB", back_populates="enrollments")
     group = relationship("GroupDB", back_populates="enrollments")
 
-
 # ========== ТАБЛИЦА ПОСЕЩАЕМОСТИ ==========
 class AttendanceDB(Base):
     __tablename__ = "attendances"
@@ -198,29 +195,27 @@ class AttendanceDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     training_id = Column(Integer, ForeignKey("trainings.id"), nullable=False)
     child_id = Column(Integer, ForeignKey("children.id"), nullable=False)
-    status = Column(Enum(AttendanceStatus), nullable=False)
-    comment = Column(String)
-    marked_by = Column(String)  # кто поставил отметку
+    status = Column(SQLEnum(AttendanceStatus), nullable=False)
+    marked_by = Column(String)
     marked_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
 
     # Связи
     training = relationship("TrainingDB", back_populates="attendances")
     child = relationship("ChildDB", back_populates="attendances")
 
-
 # ========== ТАБЛИЦА ЗАЯВОК ==========
 class ApplicationDB(Base):
     __tablename__ = "applications"
 
     id = Column(Integer, primary_key=True, index=True)
-    parent_id = Column(Integer, ForeignKey("parents.id"), nullable=True)  # NULL для публичных заявок
+    parent_id = Column(Integer, ForeignKey("parents.id"), nullable=True)
     child_id = Column(Integer, ForeignKey("children.id"), nullable=True)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
-    status = Column(Enum(ApplicationStatus), default=ApplicationStatus.NEW)
+    status = Column(SQLEnum(ApplicationStatus), default=ApplicationStatus.NEW)
     admin_comment = Column(String)
     created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
 
-    # Для публичных заявок (родитель без аккаунта)
+    # Для публичных заявок
     public_parent_name = Column(String)
     public_parent_phone = Column(String)
     public_parent_email = Column(String)
@@ -235,21 +230,6 @@ class ApplicationDB(Base):
     parent = relationship("ParentDB", back_populates="applications")
     group = relationship("GroupDB", back_populates="applications")
 
-
-# ========== ТАБЛИЦА ЗАМЕТОК ТРЕНЕРА ==========
-class CoachNoteDB(Base):
-    __tablename__ = "coach_notes"
-
-    id = Column(Integer, primary_key=True, index=True)
-    coach_id = Column(Integer, ForeignKey("coaches.id"), nullable=False)
-    child_id = Column(Integer, ForeignKey("children.id"), nullable=False)
-    note = Column(String)
-    created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
-    updated_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
-
-    coach = relationship("CoachDB", back_populates="child_notes")
-
-
 # ========== ТАБЛИЦА ИСТОРИИ ПЕРЕВОДОВ ==========
 class TransferHistoryDB(Base):
     __tablename__ = "transfer_history"
@@ -259,11 +239,15 @@ class TransferHistoryDB(Base):
     from_group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
     to_group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
     reason = Column(String)
-    created_by = Column(String)  # кто перевёл
+    created_by = Column(String)
     created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
 
+    # Связи
+    child = relationship("ChildDB", back_populates="transfer_history")
+    from_group = relationship("GroupDB", foreign_keys=[from_group_id], back_populates="transfer_history_from")
+    to_group = relationship("GroupDB", foreign_keys=[to_group_id], back_populates="transfer_history_to")
 
-# ========== ТАБЛИЦА ЗАПРОСОВ НА ПЕРЕВОД (от тренера) ==========
+# ========== ТАБЛИЦА ЗАПРОСОВ НА ПЕРЕВОД ==========
 class TransferRequestDB(Base):
     __tablename__ = "transfer_requests"
 
@@ -273,10 +257,15 @@ class TransferRequestDB(Base):
     from_group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
     suggested_group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
     comment = Column(String)
-    status = Column(String, default="pending")  # pending/approved/rejected
+    status = Column(String, default="pending")
     admin_response = Column(String)
     created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
 
+    # Связи
+    coach = relationship("CoachDB", back_populates="transfer_requests")
+    child = relationship("ChildDB", back_populates="transfer_requests")
+    from_group = relationship("GroupDB", foreign_keys=[from_group_id], back_populates="transfer_requests_from")
+    suggested_group = relationship("GroupDB", foreign_keys=[suggested_group_id], back_populates="transfer_requests_to")
 
 # ========== ТАБЛИЦА УВЕДОМЛЕНИЙ ==========
 class NotificationDB(Base):
@@ -285,9 +274,12 @@ class NotificationDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     parent_id = Column(Integer, ForeignKey("parents.id"), nullable=False)
     message = Column(String)
-    type = Column(String)  # absence_warning/reminder/application_status/system
+    type = Column(String)
     is_read = Column(Boolean, default=False)
     created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
+
+    # Связи
+    parent = relationship("ParentDB", back_populates="notifications")
 
 
 # ========== СОЗДАНИЕ ТАБЛИЦ ==========
@@ -295,102 +287,22 @@ Base.metadata.create_all(bind=engine)
 
 
 # ========== ФУНКЦИИ ДЛЯ РАБОТЫ С БД ==========
-
 def get_db():
-    """Возвращает сессию базы данных"""
     db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
-
-def create_test_users(db: Session):
-    """Создаёт тестовых пользователей для демонстрации"""
-    if db.query(ParentDB).count() > 0:
-        return
-
-    # Администратор
-    admin = ParentDB(
-        name="Администратор",
-        email="admin@pool.ru",
-        phone="+79000000001",
-        password="admin123",
-        role="admin"
-    )
-    db.add(admin)
-
-    # Родитель
-    parent = ParentDB(
-        name="Мария Иванова",
-        email="parent@pool.ru",
-        phone="+79000000002",
-        password="parent123",
-        role="parent"
-    )
-    db.add(parent)
-    db.flush()
-
-    # Ребёнок
-    child = ChildDB(
-        parent_id=parent.id,
-        name="Петя Иванов",
-        birthdate=datetime(2018, 5, 15).date(),
-        class_num=1,
-        study_year=1,
-        medical_note="Справка №123",
-        medical_date=datetime(2025, 9, 1).date()
-    )
-    db.add(child)
-
-    # Тренер
-    coach = CoachDB(
-        name="Иван Петрович",
-        email="coach@pool.ru",
-        phone="+79000000003",
-        password="coach123"
-    )
-    db.add(coach)
-    db.flush()
-
-    # Группа
-    group = GroupDB(
-        name="Начинающие 6-7 лет",
-        level=1,
-        coach_id=coach.id,
-        max_capacity=10
-    )
-    db.add(group)
-    db.flush()
-
-    # TimeSlot
-    slot = TimeSlotDB(
-        group_id=group.id,
-        day_of_week=0,
-        start_time=datetime.strptime("18:00", "%H:%M").time(),
-        end_time=datetime.strptime("19:00", "%H:%M").time()
-    )
-    db.add(slot)
-
-    db.commit()
-    print("✅ Созданы тестовые пользователи:")
-    print("   Админ: admin@pool.ru / admin123")
-    print("   Родитель: parent@pool.ru / parent123")
-    print("   Тренер: coach@pool.ru / coach123")
-
-
 def get_user_by_email(db: Session, email: str, password: str):
-    """Проверяет логин-пароль, возвращает пользователя любой роли или None"""
-    # Ищем среди родителей и админов
     parent = db.query(ParentDB).filter(
         ParentDB.email == email,
         ParentDB.password == password,
         ParentDB.is_active == True
     ).first()
     if parent:
-        return {"id": parent.id, "role": parent.role, "name": parent.name, "data": parent}
+        return {"id": parent.id, "role": parent.role.value, "name": parent.name, "data": parent}
 
-    # Ищем среди тренеров
     coach = db.query(CoachDB).filter(
         CoachDB.email == email,
         CoachDB.password == password,

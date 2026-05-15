@@ -1,12 +1,8 @@
 
-Роль	        Email	                Пароль
-Администратор	admin@pool.ru	        admin123
-Родитель	    maria@example.com	    parent123
-Родитель	    sergey@example.com	    parent123
-Родитель	    anna@example.com	    parent123
-Тренер	        ivan.coach@pool.ru	    coach123
-Тренер	        elena.coach@pool.ru	    coach123
-Тренер	        alexey.coach@pool.ru	coach123
+Админ: admin@pool.ru / admin123
 
+Родитель: maria@example.com / parent123
+
+Тренер: ivan.coach@pool.ru / coach123
 
 запуск python main.py

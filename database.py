@@ -73,6 +73,7 @@ class ParentDB(Base):
     applications = relationship("ApplicationDB", back_populates="parent")
     notifications = relationship("NotificationDB", back_populates="parent")
 
+
 # ========== ТАБЛИЦА ДЕТЕЙ ==========
 class ChildDB(Base):
     __tablename__ = "children"

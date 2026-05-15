@@ -87,6 +87,7 @@
                 <button class="nav-btn" onclick="showPage('applications')">📋 Заявки</button>
                 <button class="nav-btn" onclick="showPage('coaches')">🏊‍♂️ Тренеры</button>
                 <button class="nav-btn" onclick="showPage('transfers')">🔄 Переводы</button>
+                <button class="nav-btn" onclick="openVKSettings()">🔗 VK Бот</button>
             </div>
             <div class="content">
                 <div id="dashboardPage" class="page active-page">
@@ -298,113 +299,123 @@
         </div>
     </div>
 
+    <div id="vkSettingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🔗 Привязка VK аккаунта</h3>
+                <span class="close" onclick="closeVKSettingsModal()">&times;</span>
+            </div>
+            <div id="vkSettingsContent"></div>
+        </div>
+    </div>
+
     <div id="alertMessage" class="alert"></div>
 
     <script>
         const API_BASE = '/api';
         let currentUser = null;
 
-        document.addEventListener('DOMContentLoaded', () => { 
-            checkAuth(); 
-            document.getElementById('loginForm').addEventListener('submit', handleLogin); 
-            document.getElementById('childForm').addEventListener('submit', saveChild); 
-            document.getElementById('groupForm').addEventListener('submit', saveGroup); 
-            document.getElementById('coachForm').addEventListener('submit', saveCoach); 
-            document.getElementById('transferForm').addEventListener('submit', saveTransferRequest); 
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuth();
+            document.getElementById('loginForm').addEventListener('submit', handleLogin);
+            document.getElementById('childForm').addEventListener('submit', saveChild);
+            document.getElementById('groupForm').addEventListener('submit', saveGroup);
+            document.getElementById('coachForm').addEventListener('submit', saveCoach);
+            document.getElementById('transferForm').addEventListener('submit', saveTransferRequest);
         });
 
-        function checkAuth() { 
-            const savedUser = localStorage.getItem('currentUser'); 
-            if (savedUser) { 
-                currentUser = JSON.parse(savedUser); 
-                showMainApp(); 
-                loadDashboard(); 
-                loadAllData(); 
-            } 
+        function checkAuth() {
+            const savedUser = localStorage.getItem('currentUser');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                showMainApp();
+                loadDashboard();
+                loadAllData();
+            }
         }
 
-        async function handleLogin(e) { 
-            e.preventDefault(); 
-            const email = document.getElementById('loginEmail').value; 
-            const password = document.getElementById('loginPassword').value; 
-            try { 
-                const response = await fetch(`${API_BASE}/auth/login`, { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ email, password }) 
-                }); 
-                if (response.ok) { 
-                    const user = await response.json(); 
-                    currentUser = user; 
-                    localStorage.setItem('currentUser', JSON.stringify(user)); 
-                    showMainApp(); 
-                    loadDashboard(); 
-                    loadAllData(); 
-                } else { 
-                    showLoginError('Неверный email или пароль'); 
-                } 
-            } catch (error) { 
-                showLoginError('Ошибка подключения к серверу'); 
-            } 
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                if (response.ok) {
+                    const user = await response.json();
+                    currentUser = user;
+                    localStorage.setItem('currentUser', JSON.stringify(user));
+                    showMainApp();
+                    loadDashboard();
+                    loadAllData();
+                } else {
+                    showLoginError('Неверный email или пароль');
+                }
+            } catch (error) {
+                showLoginError('Ошибка подключения к серверу');
+            }
         }
 
-        function showLoginError(message) { 
-            const errorDiv = document.getElementById('loginError'); 
-            errorDiv.textContent = message; 
-            errorDiv.style.display = 'block'; 
-            setTimeout(() => { errorDiv.style.display = 'none'; }, 3000); 
+        function showLoginError(message) {
+            const errorDiv = document.getElementById('loginError');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => { errorDiv.style.display = 'none'; }, 3000);
         }
 
-        function showMainApp() { 
-            document.getElementById('loginPage').style.display = 'none'; 
-            document.getElementById('mainApp').style.display = 'block'; 
-            document.getElementById('userName').textContent = currentUser?.name || 'Пользователь'; 
+        function showMainApp() {
+            document.getElementById('loginPage').style.display = 'none';
+            document.getElementById('mainApp').style.display = 'block';
+            document.getElementById('userName').textContent = currentUser?.name || 'Пользователь';
         }
 
-        function logout() { 
-            localStorage.removeItem('currentUser'); 
-            currentUser = null; 
-            document.getElementById('loginPage').style.display = 'block'; 
-            document.getElementById('mainApp').style.display = 'none'; 
+        function logout() {
+            localStorage.removeItem('currentUser');
+            currentUser = null;
+            document.getElementById('loginPage').style.display = 'block';
+            document.getElementById('mainApp').style.display = 'none';
         }
 
-        function showAlert(message, type = 'success') { 
-            const alert = document.getElementById('alertMessage'); 
-            alert.className = `alert alert-${type}`; 
-            alert.textContent = message; 
-            alert.style.display = 'block'; 
-            setTimeout(() => { alert.style.display = 'none'; }, 3000); 
+        function showAlert(message, type = 'success') {
+            const alert = document.getElementById('alertMessage');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+            alert.style.display = 'block';
+            setTimeout(() => { alert.style.display = 'none'; }, 3000);
         }
 
-        function showPage(pageName) { 
-            document.querySelectorAll('.page').forEach(page => page.classList.remove('active-page')); 
-            document.getElementById(`${pageName}Page`).classList.add('active-page'); 
-            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active')); 
-            event.target.classList.add('active'); 
-            loadPageData(pageName); 
+        function showPage(pageName) {
+            document.querySelectorAll('.page').forEach(page => page.classList.remove('active-page'));
+            document.getElementById(`${pageName}Page`).classList.add('active-page');
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            loadPageData(pageName);
         }
 
-        function loadPageData(pageName) { 
-            switch(pageName) { 
-                case 'dashboard': loadDashboard(); break; 
-                case 'children': loadChildren(); break; 
-                case 'groups': loadGroups(); break; 
-                case 'trainings': loadTrainings(); loadGroupsForFilter(); break; 
-                case 'attendance': loadTrainingsForAttendance(); break; 
-                case 'applications': loadApplications(); break; 
-                case 'coaches': loadCoaches(); break; 
-                case 'transfers': loadTransferRequests(); break; 
-            } 
+        function loadPageData(pageName) {
+            switch(pageName) {
+                case 'dashboard': loadDashboard(); break;
+                case 'children': loadChildren(); break;
+                case 'groups': loadGroups(); break;
+                case 'trainings': loadTrainings(); loadGroupsForFilter(); break;
+                case 'attendance': loadTrainingsForAttendance(); break;
+                case 'applications': loadApplications(); break;
+                case 'coaches': loadCoaches(); break;
+                case 'transfers': loadTransferRequests(); break;
+            }
         }
 
-        async function loadAllData() { 
-            await Promise.all([loadChildren(), loadGroups(), loadTrainings(), loadCoaches()]); 
+        async function loadAllData() {
+            await Promise.all([loadChildren(), loadGroups(), loadTrainings(), loadCoaches()]);
         }
 
-        async function loadDashboard() { 
-            try { 
-                const response = await fetch(`${API_BASE}/dashboard/stats`); 
-                const stats = await response.json(); 
+        async function loadDashboard() {
+            try {
+                const response = await fetch(`${API_BASE}/dashboard/stats`);
+                const stats = await response.json();
                 document.getElementById('statsGrid').innerHTML = `
                     <div class="stat-card"><div class="stat-number">${stats.children || 0}</div><div class="stat-label">Детей</div></div>
                     <div class="stat-card"><div class="stat-number">${stats.groups || 0}</div><div class="stat-label">Групп</div></div>
@@ -412,16 +423,21 @@
                     <div class="stat-card"><div class="stat-number">${stats.trainingsThisMonth || 0}</div><div class="stat-label">Тренировок в месяце</div></div>
                     <div class="stat-card"><div class="stat-number">${stats.attendanceRate || 0}%</div><div class="stat-label">Посещаемость</div></div>
                     <div class="stat-card"><div class="stat-number">${stats.pendingApplications || 0}</div><div class="stat-label">Заявок на рассмотрении</div></div>
-                `; 
-            } catch (error) { 
-                console.error('Error loading dashboard:', error); 
-            } 
+                `;
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+            }
         }
 
-        async function loadChildren() { 
-            try { 
-                const response = await fetch(`${API_BASE}/children`); 
-                const children = await response.json(); 
+        // Функция загрузки детей с учётом роли
+        async function loadChildren() {
+            try {
+                let url = `${API_BASE}/children`;
+                if (currentUser.role === 'parent') {
+                    url += `?parent_id=${currentUser.id}`;
+                }
+                const response = await fetch(url);
+                const children = await response.json();
                 document.getElementById('childrenTableBody').innerHTML = children.map(child => `
                     <tr>
                         <td>${child.id}</td>
@@ -431,20 +447,29 @@
                         <td>${child.group_name || 'Не назначен'}</td>
                         <td><span class="status-badge ${child.is_active ? 'status-active' : 'status-completed'}">${child.is_active ? 'Активен' : 'Неактивен'}</span></td>
                         <td>
-                            <button class="btn" style="background:#28a745;color:white;padding:5px 10px;" onclick="editChild(${child.id})">✏️</button>
-                            <button class="btn" style="background:#dc3545;color:white;padding:5px 10px;" onclick="deleteChild(${child.id})">🗑️</button>
+                            ${currentUser.role === 'parent' ? `
+                                <button class="btn" style="background:#28a745;color:white;padding:5px 10px;" onclick="editChild(${child.id})">✏️</button>
+                            ` : ''}
+                            ${currentUser.role === 'admin' ? `
+                                <button class="btn" style="background:#dc3545;color:white;padding:5px 10px;" onclick="deleteChild(${child.id})">🗑️</button>
+                            ` : ''}
                         </td>
                     </tr>
-                `).join(''); 
-            } catch (error) { 
-                console.error('Error loading children:', error); 
-            } 
+                `).join('');
+            } catch (error) {
+                console.error('Error loading children:', error);
+            }
         }
 
-        async function loadGroups() { 
-            try { 
-                const response = await fetch(`${API_BASE}/groups`); 
-                const groups = await response.json(); 
+        // Функция загрузки групп с учётом роли
+        async function loadGroups() {
+            try {
+                let url = `${API_BASE}/groups`;
+                if (currentUser.role === 'coach') {
+                    url += `?coach_id=${currentUser.id}`;
+                }
+                const response = await fetch(url);
+                const groups = await response.json();
                 document.getElementById('groupsTableBody').innerHTML = groups.map(group => `
                     <tr>
                         <td>${group.id}</td>
@@ -454,43 +479,61 @@
                         <td>${group.max_capacity}</td>
                         <td>${group.current_enrollment || 0}/${group.max_capacity}</td>
                         <td>
-                            <button class="btn" style="background:#28a745;color:white;padding:5px 10px;" onclick="editGroup(${group.id})">✏️</button>
-                            <button class="btn" style="background:#dc3545;color:white;padding:5px 10px;" onclick="deleteGroup(${group.id})">🗑️</button>
+                            ${currentUser.role === 'admin' ? `
+                                <button class="btn" style="background:#28a745;color:white;padding:5px 10px;" onclick="editGroup(${group.id})">✏️</button>
+                                <button class="btn" style="background:#dc3545;color:white;padding:5px 10px;" onclick="deleteGroup(${group.id})">🗑️</button>
+                            ` : ''}
                         </td>
                     </tr>
-                `).join(''); 
-            } catch (error) { 
-                console.error('Error loading groups:', error); 
-            } 
+                `).join('');
+            } catch (error) {
+                console.error('Error loading groups:', error);
+            }
         }
 
-        async function loadTrainings() { 
-            const groupFilter = document.getElementById('trainingGroupFilter')?.value || ''; 
-            try { 
-                const url = groupFilter ? `${API_BASE}/trainings?group_id=${groupFilter}` : `${API_BASE}/trainings`; 
-                const response = await fetch(url); 
-                const trainings = await response.json(); 
+        // Функция загрузки тренировок с учётом роли
+        async function loadTrainings() {
+            const groupFilter = document.getElementById('trainingGroupFilter')?.value || '';
+            try {
+                let url = `${API_BASE}/trainings`;
+                if (currentUser.role === 'coach') {
+                    url += `?coach_id=${currentUser.id}`;
+                }
+                if (groupFilter) {
+                    url += `${currentUser.role === 'coach' ? '&' : '?'}group_id=${groupFilter}`;
+                }
+                const response = await fetch(url);
+                const trainings = await response.json();
                 document.getElementById('trainingsTableBody').innerHTML = trainings.map(training => `
                     <tr>
                         <td>${training.date}</td>
                         <td>${training.group_name}</td>
                         <td>${training.start_time} - ${training.end_time}</td>
                         <td><span class="status-badge ${training.status === 'scheduled' ? 'status-active' : 'status-completed'}">${training.status === 'scheduled' ? 'Запланирована' : 'Проведена'}</span></td>
-                        <td><button class="btn btn-primary" style="padding:5px 10px;" onclick="markAttendance(${training.id})">Отметить посещаемость</button></td>
+                        <td>${currentUser.role === 'coach' || currentUser.role === 'admin' ? `<button class="btn btn-primary" style="padding:5px 10px;" onclick="markAttendance(${training.id})">Отметить посещаемость</button>` : ''}</td>
                     </tr>
-                `).join(''); 
-            } catch (error) { 
-                console.error('Error loading trainings:', error); 
-            } 
+                `).join('');
+            } catch (error) {
+                console.error('Error loading trainings:', error);
+            }
         }
 
-        async function loadAttendance() { 
-            const trainingId = document.getElementById('attendanceTraining').value; 
-            if (!trainingId) return; 
-            try { 
-                const response = await fetch(`${API_BASE}/trainings/${trainingId}/attendance`); 
-                const attendance = await response.json(); 
-                document.getElementById('attendanceForm').innerHTML = `
+        // Функция загрузки посещаемости с учётом роли
+        async function loadAttendance() {
+            const trainingId = document.getElementById('attendanceTraining').value;
+            if (!trainingId) return;
+            try {
+                let url = `${API_BASE}/trainings/${trainingId}/attendance`;
+                if (currentUser.role === 'coach') {
+                    url += `?coach_id=${currentUser.id}`;
+                }
+                if (currentUser.role === 'parent') {
+                    url += `?parent_id=${currentUser.id}`;
+                }
+                const response = await fetch(url);
+                const attendance = await response.json();
+
+                let tableHtml = `
                     <h3>Отметка посещаемости</h3>
                     <table class="data-table">
                         <thead>
@@ -500,49 +543,81 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${attendance.map(item => `
-                                <tr>
-                                    <td>${item.child_name}</td>
-                                    <td>
-                                        <select onchange="updateAttendance(${trainingId}, ${item.child_id}, this.value)">
-                                            <option value="present" ${item.status === 'present' ? 'selected' : ''}>Присутствовал</option>
-                                            <option value="absent_sick" ${item.status === 'absent_sick' ? 'selected' : ''}>Отсутствовал (болезнь)</option>
-                                            <option value="absent_family" ${item.status === 'absent_family' ? 'selected' : ''}>Отсутствовал (семейные обстоятельства)</option>
-                                            <option value="absent_no_reason" ${item.status === 'absent_no_reason' ? 'selected' : ''}>Отсутствовал (без причины)</option>
-                                        </select>
-                                    </td>
-                                </tr>
-                            `).join('')}
+                `;
+
+                for (const item of attendance) {
+                    if (currentUser.role === 'coach' || currentUser.role === 'admin') {
+                        tableHtml += `
+                            <tr>
+                                <td>${item.child_name}</td>
+                                <td>
+                                    <select onchange="updateAttendance(${trainingId}, ${item.child_id}, this.value)">
+                                        <option value="present" ${item.status === 'present' ? 'selected' : ''}>✅ Присутствовал</option>
+                                        <option value="absent_sick" ${item.status === 'absent_sick' ? 'selected' : ''}>❌ Болезнь</option>
+                                        <option value="absent_family" ${item.status === 'absent_family' ? 'selected' : ''}>📌 Семейные обстоятельства</option>
+                                        <option value="absent_no_reason" ${item.status === 'absent_no_reason' ? 'selected' : ''}>⚠️ Без причины</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        const statusText = {
+                            'present': '✅ Присутствовал',
+                            'absent_sick': '❌ Отсутствовал (болезнь)',
+                            'absent_family': '📌 Отсутствовал (семейные обстоятельства)',
+                            'absent_no_reason': '⚠️ Отсутствовал (без причины)',
+                            'not_marked': '⏳ Не отмечено'
+                        };
+                        tableHtml += `
+                            <tr>
+                                <td>${item.child_name}</td>
+                                <td>${statusText[item.status] || item.status}</td>
+                            </tr>
+                        `;
+                    }
+                }
+
+                tableHtml += `
                         </tbody>
                     </table>
-                    <button class="btn btn-primary" onclick="saveAttendance(${trainingId})">Сохранить</button>
-                `; 
-            } catch (error) { 
-                console.error('Error loading attendance:', error); 
-            } 
+                `;
+
+                if (currentUser.role === 'coach' || currentUser.role === 'admin') {
+                    tableHtml += `<button class="btn btn-primary" onclick="saveAttendance(${trainingId})">Сохранить всё</button>`;
+                }
+
+                document.getElementById('attendanceForm').innerHTML = tableHtml;
+            } catch (error) {
+                console.error('Error loading attendance:', error);
+            }
         }
 
-        async function updateAttendance(trainingId, childId, status) { 
-            try { 
-                await fetch(`${API_BASE}/attendance`, { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ training_id: trainingId, child_id: childId, status }) 
-                }); 
-                showAlert('Посещаемость обновлена'); 
-            } catch (error) { 
-                console.error('Error updating attendance:', error); 
-            } 
+        // Обновление отметки посещаемости
+        async function updateAttendance(trainingId, childId, status) {
+            try {
+                const response = await fetch(`${API_BASE}/attendance?coach_id=${currentUser.id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ training_id: trainingId, child_id: childId, status })
+                });
+                if (response.ok) {
+                    showAlert('Посещаемость обновлена');
+                }
+            } catch (error) {
+                console.error('Error updating attendance:', error);
+                showAlert('Ошибка при сохранении', 'error');
+            }
         }
 
-        function saveAttendance(trainingId) { 
-            showAlert('Посещаемость сохранена'); 
+        function saveAttendance(trainingId) {
+            showAlert('Посещаемость сохранена');
+            loadAttendance();
         }
 
-        async function loadApplications() { 
-            try { 
-                const response = await fetch(`${API_BASE}/applications`); 
-                const applications = await response.json(); 
+        async function loadApplications() {
+            try {
+                const response = await fetch(`${API_BASE}/applications`);
+                const applications = await response.json();
                 document.getElementById('applicationsTableBody').innerHTML = applications.map(app => `
                     <tr>
                         <td>${app.id}</td>
@@ -550,21 +625,21 @@
                         <td>${app.group_name}</td>
                         <td><span class="status-badge">${getStatusText(app.status)}</span></td>
                         <td>${app.created_at}</td>
-                        <td>${(app.status === 'new' || app.status === 'on_review') ? `
+                        <td>${(app.status === 'new' || app.status === 'on_review') && currentUser.role === 'admin' ? `
                             <button class="btn btn-success" style="padding:5px 10px;" onclick="approveApplication(${app.id})">✅ Одобрить</button>
                             <button class="btn btn-danger" style="padding:5px 10px;" onclick="rejectApplication(${app.id})">❌ Отклонить</button>
                         ` : ''}</td>
                     </tr>
-                `).join(''); 
-            } catch (error) { 
-                console.error('Error loading applications:', error); 
-            } 
+                `).join('');
+            } catch (error) {
+                console.error('Error loading applications:', error);
+            }
         }
 
-        async function loadCoaches() { 
-            try { 
-                const response = await fetch(`${API_BASE}/coaches`); 
-                const coaches = await response.json(); 
+        async function loadCoaches() {
+            try {
+                const response = await fetch(`${API_BASE}/coaches`);
+                const coaches = await response.json();
                 document.getElementById('coachesTableBody').innerHTML = coaches.map(coach => `
                     <tr>
                         <td>${coach.id}</td>
@@ -573,24 +648,26 @@
                         <td>${coach.phone || '-'}</td>
                         <td>${coach.groups_count || 0}</td>
                         <td>
-                            <button class="btn" style="background:#28a745;color:white;padding:5px 10px;" onclick="editCoach(${coach.id})">✏️</button>
-                            <button class="btn" style="background:#dc3545;color:white;padding:5px 10px;" onclick="deleteCoach(${coach.id})">🗑️</button>
+                            ${currentUser.role === 'admin' ? `
+                                <button class="btn" style="background:#28a745;color:white;padding:5px 10px;" onclick="editCoach(${coach.id})">✏️</button>
+                                <button class="btn" style="background:#dc3545;color:white;padding:5px 10px;" onclick="deleteCoach(${coach.id})">🗑️</button>
+                            ` : ''}
                         </td>
                     </tr>
-                `).join(''); 
-                const coachSelect = document.getElementById('groupCoachId'); 
-                if (coachSelect) { 
-                    coachSelect.innerHTML = '<option value="">Выберите тренера</option>' + coaches.map(coach => `<option value="${coach.id}">${coach.name}</option>`).join(''); 
-                } 
-            } catch (error) { 
-                console.error('Error loading coaches:', error); 
-            } 
+                `).join('');
+                const coachSelect = document.getElementById('groupCoachId');
+                if (coachSelect && currentUser.role === 'admin') {
+                    coachSelect.innerHTML = '<option value="">Выберите тренера</option>' + coaches.map(coach => `<option value="${coach.id}">${coach.name}</option>`).join('');
+                }
+            } catch (error) {
+                console.error('Error loading coaches:', error);
+            }
         }
 
-        async function loadTransferRequests() { 
-            try { 
-                const response = await fetch(`${API_BASE}/transfer-requests`); 
-                const transfers = await response.json(); 
+        async function loadTransferRequests() {
+            try {
+                const response = await fetch(`${API_BASE}/transfer-requests`);
+                const transfers = await response.json();
                 document.getElementById('transfersTableBody').innerHTML = transfers.map(transfer => `
                     <tr>
                         <td>${transfer.id}</td>
@@ -598,343 +675,526 @@
                         <td>${transfer.from_group_name}</td>
                         <td>${transfer.suggested_group_name || 'Не указана'}</td>
                         <td><span class="status-badge">${transfer.status === 'pending' ? 'На рассмотрении' : transfer.status === 'approved' ? 'Одобрен' : 'Отклонён'}</span></td>
-                        <td>${transfer.status === 'pending' ? `
+                        <td>${transfer.status === 'pending' && currentUser.role === 'admin' ? `
                             <button class="btn btn-success" style="padding:5px 10px;" onclick="approveTransfer(${transfer.id})">✅ Одобрить</button>
                             <button class="btn btn-danger" style="padding:5px 10px;" onclick="rejectTransfer(${transfer.id})">❌ Отклонить</button>
                         ` : ''}</td>
                     </tr>
-                `).join(''); 
+                `).join('');
 
-                const children = await fetch(`${API_BASE}/children`).then(r => r.json()); 
-                const groups = await fetch(`${API_BASE}/groups`).then(r => r.json()); 
-                const childSelect = document.getElementById('transferChildId'); 
-                if (childSelect) { 
-                    childSelect.innerHTML = children.map(child => `<option value="${child.id}">${child.name}</option>`).join(''); 
-                } 
-                const fromGroupSelect = document.getElementById('transferFromGroupId'); 
-                const toGroupSelect = document.getElementById('transferSuggestedGroupId'); 
-                if (fromGroupSelect && toGroupSelect) { 
-                    const options = groups.map(group => `<option value="${group.id}">${group.name}</option>`).join(''); 
-                    fromGroupSelect.innerHTML = options; 
-                    toGroupSelect.innerHTML = '<option value="">Не выбрана</option>' + options; 
-                } 
-            } catch (error) { 
-                console.error('Error loading transfer requests:', error); 
-            } 
+                if (currentUser.role === 'coach') {
+                    const children = await fetch(`${API_BASE}/children`).then(r => r.json());
+                    const groups = await fetch(`${API_BASE}/groups?coach_id=${currentUser.id}`).then(r => r.json());
+                    const childSelect = document.getElementById('transferChildId');
+                    if (childSelect) {
+                        childSelect.innerHTML = children.map(child => `<option value="${child.id}">${child.name}</option>`).join('');
+                    }
+                    const fromGroupSelect = document.getElementById('transferFromGroupId');
+                    const toGroupSelect = document.getElementById('transferSuggestedGroupId');
+                    if (fromGroupSelect && toGroupSelect) {
+                        const options = groups.map(group => `<option value="${group.id}">${group.name}</option>`).join('');
+                        fromGroupSelect.innerHTML = options;
+                        toGroupSelect.innerHTML = '<option value="">Не выбрана</option>' + options;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading transfer requests:', error);
+            }
         }
 
-        async function loadGroupsForFilter() { 
-            try { 
-                const response = await fetch(`${API_BASE}/groups`); 
-                const groups = await response.json(); 
-                const filter = document.getElementById('trainingGroupFilter'); 
-                filter.innerHTML = '<option value="">Все группы</option>' + groups.map(group => `<option value="${group.id}">${group.name}</option>`).join(''); 
-            } catch (error) { 
-                console.error('Error loading groups for filter:', error); 
-            } 
+        async function loadGroupsForFilter() {
+            try {
+                let url = `${API_BASE}/groups`;
+                if (currentUser.role === 'coach') {
+                    url += `?coach_id=${currentUser.id}`;
+                }
+                const response = await fetch(url);
+                const groups = await response.json();
+                const filter = document.getElementById('trainingGroupFilter');
+                filter.innerHTML = '<option value="">Все группы</option>' + groups.map(group => `<option value="${group.id}">${group.name}</option>`).join('');
+            } catch (error) {
+                console.error('Error loading groups for filter:', error);
+            }
         }
 
-        async function loadTrainingsForAttendance() { 
-            try { 
-                const response = await fetch(`${API_BASE}/trainings?status=scheduled`); 
-                const trainings = await response.json(); 
-                const select = document.getElementById('attendanceTraining'); 
-                select.innerHTML = '<option value="">Выберите тренировку</option>' + trainings.map(training => `<option value="${training.id}">${training.date} - ${training.group_name} (${training.start_time})</option>`).join(''); 
-            } catch (error) { 
-                console.error('Error loading trainings for attendance:', error); 
-            } 
+        async function loadTrainingsForAttendance() {
+            try {
+                let url = `${API_BASE}/trainings?status=scheduled`;
+                if (currentUser.role === 'coach') {
+                    url += `&coach_id=${currentUser.id}`;
+                }
+                const response = await fetch(url);
+                const trainings = await response.json();
+                const select = document.getElementById('attendanceTraining');
+                select.innerHTML = '<option value="">Выберите тренировку</option>' + trainings.map(training => `<option value="${training.id}">${training.date} - ${training.group_name} (${training.start_time})</option>`).join('');
+            } catch (error) {
+                console.error('Error loading trainings for attendance:', error);
+            }
         }
 
-        function openChildModal() { 
-            document.getElementById('childModalTitle').textContent = 'Добавить ребёнка'; 
-            document.getElementById('childForm').reset(); 
-            document.getElementById('childId').value = ''; 
-            document.getElementById('childModal').style.display = 'flex'; 
+        function openChildModal() {
+            if (currentUser.role !== 'parent') {
+                showAlert('Только родители могут добавлять детей', 'error');
+                return;
+            }
+            document.getElementById('childModalTitle').textContent = 'Добавить ребёнка';
+            document.getElementById('childForm').reset();
+            document.getElementById('childId').value = '';
+            document.getElementById('childModal').style.display = 'flex';
         }
 
-        function closeChildModal() { 
-            document.getElementById('childModal').style.display = 'none'; 
+        function closeChildModal() {
+            document.getElementById('childModal').style.display = 'none';
         }
 
-        async function editChild(id) { 
-            try { 
-                const response = await fetch(`${API_BASE}/children/${id}`); 
-                const child = await response.json(); 
-                document.getElementById('childModalTitle').textContent = 'Редактировать ребёнка'; 
-                document.getElementById('childId').value = child.id; 
-                document.getElementById('childName').value = child.name; 
-                document.getElementById('childBirthdate').value = child.birthdate; 
-                document.getElementById('childClass').value = child.class_num || ''; 
-                document.getElementById('childStudyYear').value = child.study_year || ''; 
-                document.getElementById('childMedicalNote').value = child.medical_note || ''; 
-                document.getElementById('childModal').style.display = 'flex'; 
-            } catch (error) { 
-                console.error('Error loading child:', error); 
-            } 
+        async function editChild(id) {
+            if (currentUser.role !== 'parent') {
+                showAlert('Только родители могут редактировать', 'error');
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE}/children/${id}?parent_id=${currentUser.id}`);
+                const child = await response.json();
+                document.getElementById('childModalTitle').textContent = 'Редактировать ребёнка';
+                document.getElementById('childId').value = child.id;
+                document.getElementById('childName').value = child.name;
+                document.getElementById('childBirthdate').value = child.birthdate;
+                document.getElementById('childClass').value = child.class_num || '';
+                document.getElementById('childStudyYear').value = child.study_year || '';
+                document.getElementById('childMedicalNote').value = child.medical_note || '';
+                document.getElementById('childModal').style.display = 'flex';
+            } catch (error) {
+                console.error('Error loading child:', error);
+            }
         }
 
-        async function saveChild(e) { 
-            e.preventDefault(); 
-            const id = document.getElementById('childId').value; 
-            const data = { 
-                name: document.getElementById('childName').value, 
-                birthdate: document.getElementById('childBirthdate').value, 
-                class_num: parseInt(document.getElementById('childClass').value) || null, 
-                study_year: parseInt(document.getElementById('childStudyYear').value) || null, 
-                medical_note: document.getElementById('childMedicalNote').value 
-            }; 
-            try { 
-                const url = id ? `${API_BASE}/children/${id}` : `${API_BASE}/children`; 
-                const method = id ? 'PUT' : 'POST'; 
-                const response = await fetch(url, { 
-                    method: method, 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify(data) 
-                }); 
-                if (response.ok) { 
-                    showAlert(id ? 'Ребёнок обновлён' : 'Ребёнок добавлен'); 
-                    closeChildModal(); 
-                    loadChildren(); 
-                } 
-            } catch (error) { 
-                console.error('Error saving child:', error); 
-                showAlert('Ошибка при сохранении', 'error'); 
-            } 
+        async function saveChild(e) {
+            e.preventDefault();
+            const id = document.getElementById('childId').value;
+            const data = {
+                name: document.getElementById('childName').value,
+                birthdate: document.getElementById('childBirthdate').value,
+                class_num: parseInt(document.getElementById('childClass').value) || null,
+                study_year: parseInt(document.getElementById('childStudyYear').value) || null,
+                medical_note: document.getElementById('childMedicalNote').value
+            };
+            try {
+                const url = id ? `${API_BASE}/children/${id}?parent_id=${currentUser.id}` : `${API_BASE}/children?parent_id=${currentUser.id}`;
+                const method = id ? 'PUT' : 'POST';
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    showAlert(id ? 'Ребёнок обновлён' : 'Ребёнок добавлен');
+                    closeChildModal();
+                    loadChildren();
+                }
+            } catch (error) {
+                console.error('Error saving child:', error);
+                showAlert('Ошибка при сохранении', 'error');
+            }
         }
 
-        async function deleteChild(id) { 
-            if (confirm('Вы уверены, что хотите удалить этого ребёнка?')) { 
-                try { 
-                    await fetch(`${API_BASE}/children/${id}`, { method: 'DELETE' }); 
-                    showAlert('Ребёнок удалён'); 
-                    loadChildren(); 
-                } catch (error) { 
-                    console.error('Error deleting child:', error); 
-                } 
-            } 
+        async function deleteChild(id) {
+            if (currentUser.role !== 'admin') {
+                showAlert('Только админ может удалять', 'error');
+                return;
+            }
+            if (confirm('Вы уверены, что хотите удалить этого ребёнка?')) {
+                try {
+                    await fetch(`${API_BASE}/children/${id}`, { method: 'DELETE' });
+                    showAlert('Ребёнок удалён');
+                    loadChildren();
+                } catch (error) {
+                    console.error('Error deleting child:', error);
+                }
+            }
         }
 
-        function openGroupModal() { 
-            document.getElementById('groupModalTitle').textContent = 'Создать группу'; 
-            document.getElementById('groupForm').reset(); 
-            document.getElementById('groupId').value = ''; 
-            document.getElementById('groupModal').style.display = 'flex'; 
+        function openGroupModal() {
+            if (currentUser.role !== 'admin') {
+                showAlert('Только админ может создавать группы', 'error');
+                return;
+            }
+            document.getElementById('groupModalTitle').textContent = 'Создать группу';
+            document.getElementById('groupForm').reset();
+            document.getElementById('groupId').value = '';
+            document.getElementById('groupModal').style.display = 'flex';
         }
 
-        function closeGroupModal() { 
-            document.getElementById('groupModal').style.display = 'none'; 
+        function closeGroupModal() {
+            document.getElementById('groupModal').style.display = 'none';
         }
 
-        async function editGroup(id) { 
-            try { 
-                const response = await fetch(`${API_BASE}/groups/${id}`); 
-                const group = await response.json(); 
-                document.getElementById('groupModalTitle').textContent = 'Редактировать группу'; 
-                document.getElementById('groupId').value = group.id; 
-                document.getElementById('groupName').value = group.name; 
-                document.getElementById('groupLevel').value = group.level; 
-                document.getElementById('groupCoachId').value = group.coach_id || ''; 
-                document.getElementById('groupMaxCapacity').value = group.max_capacity; 
-                document.getElementById('groupModal').style.display = 'flex'; 
-            } catch (error) { 
-                console.error('Error loading group:', error); 
-            } 
+        async function editGroup(id) {
+            if (currentUser.role !== 'admin') {
+                showAlert('Только админ может редактировать', 'error');
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE}/groups/${id}`);
+                const group = await response.json();
+                document.getElementById('groupModalTitle').textContent = 'Редактировать группу';
+                document.getElementById('groupId').value = group.id;
+                document.getElementById('groupName').value = group.name;
+                document.getElementById('groupLevel').value = group.level;
+                document.getElementById('groupCoachId').value = group.coach_id || '';
+                document.getElementById('groupMaxCapacity').value = group.max_capacity;
+                document.getElementById('groupModal').style.display = 'flex';
+            } catch (error) {
+                console.error('Error loading group:', error);
+            }
         }
 
-        async function saveGroup(e) { 
-            e.preventDefault(); 
-            const id = document.getElementById('groupId').value; 
-            const data = { 
-                name: document.getElementById('groupName').value, 
-                level: parseInt(document.getElementById('groupLevel').value), 
-                coach_id: parseInt(document.getElementById('groupCoachId').value) || null, 
-                max_capacity: parseInt(document.getElementById('groupMaxCapacity').value) 
-            }; 
-            try { 
-                const url = id ? `${API_BASE}/groups/${id}` : `${API_BASE}/groups`; 
-                const method = id ? 'PUT' : 'POST'; 
-                const response = await fetch(url, { 
-                    method: method, 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify(data) 
-                }); 
-                if (response.ok) { 
-                    showAlert(id ? 'Группа обновлена' : 'Группа создана'); 
-                    closeGroupModal(); 
-                    loadGroups(); 
-                } 
-            } catch (error) { 
-                console.error('Error saving group:', error); 
-            } 
+        async function saveGroup(e) {
+            e.preventDefault();
+            const id = document.getElementById('groupId').value;
+            const data = {
+                name: document.getElementById('groupName').value,
+                level: parseInt(document.getElementById('groupLevel').value),
+                coach_id: parseInt(document.getElementById('groupCoachId').value) || null,
+                max_capacity: parseInt(document.getElementById('groupMaxCapacity').value)
+            };
+            try {
+                const url = id ? `${API_BASE}/groups/${id}` : `${API_BASE}/groups`;
+                const method = id ? 'PUT' : 'POST';
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    showAlert(id ? 'Группа обновлена' : 'Группа создана');
+                    closeGroupModal();
+                    loadGroups();
+                }
+            } catch (error) {
+                console.error('Error saving group:', error);
+            }
         }
 
-        async function deleteGroup(id) { 
-            if (confirm('Вы уверены, что хотите удалить эту группу?')) { 
-                try { 
-                    await fetch(`${API_BASE}/groups/${id}`, { method: 'DELETE' }); 
-                    showAlert('Группа удалена'); 
-                    loadGroups(); 
-                } catch (error) { 
-                    console.error('Error deleting group:', error); 
-                } 
-            } 
+        async function deleteGroup(id) {
+            if (currentUser.role !== 'admin') {
+                showAlert('Только админ может удалять', 'error');
+                return;
+            }
+            if (confirm('Вы уверены, что хотите удалить эту группу?')) {
+                try {
+                    await fetch(`${API_BASE}/groups/${id}`, { method: 'DELETE' });
+                    showAlert('Группа удалена');
+                    loadGroups();
+                } catch (error) {
+                    console.error('Error deleting group:', error);
+                }
+            }
         }
 
-        function openCoachModal() { 
-            document.getElementById('coachModalTitle').textContent = 'Добавить тренера'; 
-            document.getElementById('coachForm').reset(); 
-            document.getElementById('coachId').value = ''; 
-            document.getElementById('coachModal').style.display = 'flex'; 
+        function openCoachModal() {
+            if (currentUser.role !== 'admin') {
+                showAlert('Только админ может добавлять тренеров', 'error');
+                return;
+            }
+            document.getElementById('coachModalTitle').textContent = 'Добавить тренера';
+            document.getElementById('coachForm').reset();
+            document.getElementById('coachId').value = '';
+            document.getElementById('coachModal').style.display = 'flex';
         }
 
-        function closeCoachModal() { 
-            document.getElementById('coachModal').style.display = 'none'; 
+        function closeCoachModal() {
+            document.getElementById('coachModal').style.display = 'none';
         }
 
-        async function editCoach(id) { 
-            try { 
-                const response = await fetch(`${API_BASE}/coaches/${id}`); 
-                const coach = await response.json(); 
-                document.getElementById('coachModalTitle').textContent = 'Редактировать тренера'; 
-                document.getElementById('coachId').value = coach.id; 
-                document.getElementById('coachName').value = coach.name; 
-                document.getElementById('coachEmail').value = coach.email; 
-                document.getElementById('coachPhone').value = coach.phone || ''; 
-                document.getElementById('coachModal').style.display = 'flex'; 
-            } catch (error) { 
-                console.error('Error loading coach:', error); 
-            } 
+        async function editCoach(id) {
+            if (currentUser.role !== 'admin') {
+                showAlert('Только админ может редактировать', 'error');
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE}/coaches/${id}`);
+                const coach = await response.json();
+                document.getElementById('coachModalTitle').textContent = 'Редактировать тренера';
+                document.getElementById('coachId').value = coach.id;
+                document.getElementById('coachName').value = coach.name;
+                document.getElementById('coachEmail').value = coach.email;
+                document.getElementById('coachPhone').value = coach.phone || '';
+                document.getElementById('coachModal').style.display = 'flex';
+            } catch (error) {
+                console.error('Error loading coach:', error);
+            }
         }
 
-        async function saveCoach(e) { 
-            e.preventDefault(); 
-            const id = document.getElementById('coachId').value; 
-            const data = { 
-                name: document.getElementById('coachName').value, 
-                email: document.getElementById('coachEmail').value, 
-                phone: document.getElementById('coachPhone').value, 
-                password: document.getElementById('coachPassword').value || undefined 
-            }; 
-            if (!data.password) delete data.password; 
-            try { 
-                const url = id ? `${API_BASE}/coaches/${id}` : `${API_BASE}/coaches`; 
-                const method = id ? 'PUT' : 'POST'; 
-                const response = await fetch(url, { 
-                    method: method, 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify(data) 
-                }); 
-                if (response.ok) { 
-                    showAlert(id ? 'Тренер обновлён' : 'Тренер добавлен'); 
-                    closeCoachModal(); 
-                    loadCoaches(); 
-                } 
-            } catch (error) { 
-                console.error('Error saving coach:', error); 
-            } 
+        async function saveCoach(e) {
+            e.preventDefault();
+            const id = document.getElementById('coachId').value;
+            const data = {
+                name: document.getElementById('coachName').value,
+                email: document.getElementById('coachEmail').value,
+                phone: document.getElementById('coachPhone').value,
+                password: document.getElementById('coachPassword').value || undefined
+            };
+            if (!data.password) delete data.password;
+            try {
+                const url = id ? `${API_BASE}/coaches/${id}` : `${API_BASE}/coaches`;
+                const method = id ? 'PUT' : 'POST';
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    showAlert(id ? 'Тренер обновлён' : 'Тренер добавлен');
+                    closeCoachModal();
+                    loadCoaches();
+                }
+            } catch (error) {
+                console.error('Error saving coach:', error);
+            }
         }
 
-        async function deleteCoach(id) { 
-            if (confirm('Вы уверены, что хотите удалить этого тренера?')) { 
-                try { 
-                    await fetch(`${API_BASE}/coaches/${id}`, { method: 'DELETE' }); 
-                    showAlert('Тренер удалён'); 
-                    loadCoaches(); 
-                } catch (error) { 
-                    console.error('Error deleting coach:', error); 
-                } 
-            } 
+        async function deleteCoach(id) {
+            if (currentUser.role !== 'admin') {
+                showAlert('Только админ может удалять', 'error');
+                return;
+            }
+            if (confirm('Вы уверены, что хотите удалить этого тренера?')) {
+                try {
+                    await fetch(`${API_BASE}/coaches/${id}`, { method: 'DELETE' });
+                    showAlert('Тренер удалён');
+                    loadCoaches();
+                } catch (error) {
+                    console.error('Error deleting coach:', error);
+                }
+            }
         }
 
-        function openTransferRequestModal() { 
-            document.getElementById('transferForm').reset(); 
-            document.getElementById('transferModal').style.display = 'flex'; 
+        function openTransferRequestModal() {
+            if (currentUser.role !== 'coach') {
+                showAlert('Только тренеры могут создавать запросы на перевод', 'error');
+                return;
+            }
+            document.getElementById('transferForm').reset();
+            document.getElementById('transferModal').style.display = 'flex';
         }
 
-        function closeTransferModal() { 
-            document.getElementById('transferModal').style.display = 'none'; 
+        function closeTransferModal() {
+            document.getElementById('transferModal').style.display = 'none';
         }
 
-        async function saveTransferRequest(e) { 
-            e.preventDefault(); 
-            const data = { 
-                child_id: parseInt(document.getElementById('transferChildId').value), 
-                from_group_id: parseInt(document.getElementById('transferFromGroupId').value), 
-                suggested_group_id: parseInt(document.getElementById('transferSuggestedGroupId').value) || null, 
-                comment: document.getElementById('transferComment').value 
-            }; 
-            try { 
-                const response = await fetch(`${API_BASE}/transfer-requests`, { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify(data) 
-                }); 
-                if (response.ok) { 
-                    showAlert('Запрос на перевод отправлен'); 
-                    closeTransferModal(); 
-                    loadTransferRequests(); 
-                } 
-            } catch (error) { 
-                console.error('Error saving transfer request:', error); 
-            } 
+        async function saveTransferRequest(e) {
+            e.preventDefault();
+            const data = {
+                child_id: parseInt(document.getElementById('transferChildId').value),
+                from_group_id: parseInt(document.getElementById('transferFromGroupId').value),
+                suggested_group_id: parseInt(document.getElementById('transferSuggestedGroupId').value) || null,
+                comment: document.getElementById('transferComment').value
+            };
+            try {
+                const response = await fetch(`${API_BASE}/transfer-requests`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    showAlert('Запрос на перевод отправлен');
+                    closeTransferModal();
+                    loadTransferRequests();
+                }
+            } catch (error) {
+                console.error('Error saving transfer request:', error);
+            }
         }
 
-        async function approveApplication(id) { 
-            try { 
-                await fetch(`${API_BASE}/applications/${id}/approve`, { method: 'POST' }); 
-                showAlert('Заявка одобрена'); 
-                loadApplications(); 
-            } catch (error) { 
-                console.error('Error approving application:', error); 
-            } 
+        async function approveApplication(id) {
+            if (currentUser.role !== 'admin') {
+                showAlert('Только админ может одобрять заявки', 'error');
+                return;
+            }
+            try {
+                await fetch(`${API_BASE}/applications/${id}/approve`, { method: 'POST' });
+                showAlert('Заявка одобрена');
+                loadApplications();
+            } catch (error) {
+                console.error('Error approving application:', error);
+            }
         }
 
-        async function rejectApplication(id) { 
-            try { 
-                await fetch(`${API_BASE}/applications/${id}/reject`, { method: 'POST' }); 
-                showAlert('Заявка отклонена'); 
-                loadApplications(); 
-            } catch (error) { 
-                console.error('Error rejecting application:', error); 
-            } 
+        async function rejectApplication(id) {
+            if (currentUser.role !== 'admin') {
+                showAlert('Только админ может отклонять заявки', 'error');
+                return;
+            }
+            try {
+                await fetch(`${API_BASE}/applications/${id}/reject`, { method: 'POST' });
+                showAlert('Заявка отклонена');
+                loadApplications();
+            } catch (error) {
+                console.error('Error rejecting application:', error);
+            }
         }
 
-        async function approveTransfer(id) { 
-            try { 
-                await fetch(`${API_BASE}/transfer-requests/${id}/approve`, { method: 'POST' }); 
-                showAlert('Перевод одобрен'); 
-                loadTransferRequests(); 
-            } catch (error) { 
-                console.error('Error approving transfer:', error); 
-            } 
+        async function approveTransfer(id) {
+            if (currentUser.role !== 'admin') {
+                showAlert('Только админ может одобрять переводы', 'error');
+                return;
+            }
+            try {
+                await fetch(`${API_BASE}/transfer-requests/${id}/approve`, { method: 'POST' });
+                showAlert('Перевод одобрен');
+                loadTransferRequests();
+            } catch (error) {
+                console.error('Error approving transfer:', error);
+            }
         }
 
-        async function rejectTransfer(id) { 
-            try { 
-                await fetch(`${API_BASE}/transfer-requests/${id}/reject`, { method: 'POST' }); 
-                showAlert('Перевод отклонён'); 
-                loadTransferRequests(); 
-            } catch (error) { 
-                console.error('Error rejecting transfer:', error); 
-            } 
+        async function rejectTransfer(id) {
+            if (currentUser.role !== 'admin') {
+                showAlert('Только админ может отклонять переводы', 'error');
+                return;
+            }
+            try {
+                await fetch(`${API_BASE}/transfer-requests/${id}/reject`, { method: 'POST' });
+                showAlert('Перевод отклонён');
+                loadTransferRequests();
+            } catch (error) {
+                console.error('Error rejecting transfer:', error);
+            }
         }
 
-        function markAttendance(trainingId) { 
-            showPage('attendance'); 
-            document.getElementById('attendanceTraining').value = trainingId; 
-            loadAttendance(); 
+        function markAttendance(trainingId) {
+            if (currentUser.role !== 'coach' && currentUser.role !== 'admin') {
+                showAlert('Только тренеры и админ могут отмечать посещаемость', 'error');
+                return;
+            }
+            showPage('attendance');
+            document.getElementById('attendanceTraining').value = trainingId;
+            loadAttendance();
         }
 
-        function getStatusText(status) { 
-            const statusMap = { 
-                'pending_parent_verification': 'Ожидает подтверждения', 
-                'new': 'Новая', 
-                'on_review': 'На рассмотрении', 
-                'approved': 'Одобрена', 
-                'rejected': 'Отклонена', 
-                'waiting_list': 'Лист ожидания' 
-            }; 
-            return statusMap[status] || status; 
+        function getStatusText(status) {
+            const statusMap = {
+                'pending_parent_verification': 'Ожидает подтверждения',
+                'new': 'Новая',
+                'on_review': 'На рассмотрении',
+                'approved': 'Одобрена',
+                'rejected': 'Отклонена',
+                'waiting_list': 'Лист ожидания'
+            };
+            return statusMap[status] || status;
+        }
+
+        // ========== VK Functions ==========
+        async function openVKSettings() {
+            if (!currentUser || currentUser.role !== 'parent') {
+                showAlert('Только для родителей', 'error');
+                return;
+            }
+
+            try {
+                const statusResp = await fetch(`${API_BASE}/parents/${currentUser.id}/vk-status`);
+                const status = await statusResp.json();
+
+                const modal = document.getElementById('vkSettingsModal');
+                const content = document.getElementById('vkSettingsContent');
+
+                if (status.is_linked) {
+                    content.innerHTML = `
+                        <div class="alert alert-success" style="display:block; margin-bottom:20px;">
+                            ✅ VK аккаунт привязан (ID: ${status.vk_id})
+                        </div>
+                        <div class="form-group">
+                            <label>📢 Уведомления в VK</label>
+                            <select id="vkNotificationsEnabled" onchange="updateVKNotifications()">
+                                <option value="true" ${status.notify_enabled ? 'selected' : ''}>Включены</option>
+                                <option value="false" ${!status.notify_enabled ? 'selected' : ''}>Выключены</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-danger" onclick="unlinkVK()" style="width:100%;">
+                            🔌 Отвязать VK аккаунт
+                        </button>
+                    `;
+                } else {
+                    let codeHtml = '';
+                    if (status.has_active_code) {
+                        const codeResp = await fetch(`${API_BASE}/parents/${currentUser.id}/generate-vk-code`, {
+                            method: 'POST'
+                        });
+                        const codeData = await codeResp.json();
+                        codeHtml = `
+                            <div class="alert alert-success" style="display:block; text-align:center;">
+                                <strong>Ваш код привязки:</strong><br>
+                                <span style="font-size:48px; font-weight:bold;">${codeData.code}</span>
+                                <p>Код действителен ${Math.floor(codeData.expires_in / 60)} минут</p>
+                                <button class="btn btn-primary" onclick="generateNewVKCode()">🔄 Новый код</button>
+                            </div>
+                        `;
+                    }
+
+                    content.innerHTML = `
+                        <div class="alert alert-info">🔗 Привяжите VK для получения уведомлений</div>
+                        ${codeHtml}
+                        <div style="background:#f0f0f0; padding:15px; border-radius:10px;">
+                            <h4>📱 Как привязать:</h4>
+                            <ol>
+                                <li>Напишите боту: <strong>@pool_crm_bot</strong></li>
+                                <li>Отправьте команду: <code>привязать ${status.has_active_code ? 'КОД ВЫШЕ' : 'получите код'}</code></li>
+                            </ol>
+                        </div>
+                        ${!status.has_active_code ? `
+                            <button class="btn btn-primary" onclick="generateNewVKCode()" style="width:100%; margin-top:20px;">
+                                🔑 Получить код
+                            </button>
+                        ` : ''}
+                    `;
+                }
+                modal.style.display = 'flex';
+            } catch (error) {
+                showAlert('Ошибка загрузки настроек VK', 'error');
+            }
+        }
+
+        async function generateNewVKCode() {
+            try {
+                const response = await fetch(`${API_BASE}/parents/${currentUser.id}/generate-vk-code`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                showAlert(`Код: ${data.code} (действителен ${Math.floor(data.expires_in / 60)} мин)`);
+                setTimeout(() => openVKSettings(), 1000);
+            } catch (error) {
+                showAlert('Ошибка генерации кода', 'error');
+            }
+        }
+
+        async function updateVKNotifications() {
+            const enabled = document.getElementById('vkNotificationsEnabled').value === 'true';
+            try {
+                await fetch(`${API_BASE}/parents/${currentUser.id}/notification-settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ notify_reminders: enabled })
+                });
+                showAlert(enabled ? 'Уведомления включены' : 'Уведомления выключены');
+            } catch (error) {
+                showAlert('Ошибка', 'error');
+            }
+        }
+
+        async function unlinkVK() {
+            if (confirm('Отвязать VK аккаунт?')) {
+                try {
+                    await fetch(`${API_BASE}/parents/${currentUser.id}/unlink-vk`, { method: 'POST' });
+                    showAlert('VK отвязан');
+                    openVKSettings();
+                } catch (error) {
+                    showAlert('Ошибка', 'error');
+                }
+            }
+        }
+
+        function closeVKSettingsModal() {
+            document.getElementById('vkSettingsModal').style.display = 'none';
         }
     </script>
 </body>

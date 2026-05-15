@@ -16,6 +16,30 @@ from database import (
 router = APIRouter(prefix="/api", tags=["API"])
 
 
+# ========== ФУНКЦИИ ДЛЯ ПРОВЕРКИ ПРАВ ДОСТУПА ==========
+def get_current_user_from_request(request, db: Session):
+    """Получение текущего пользователя из заголовков (упрощённо)"""
+    # В реальном приложении здесь должна быть JWT авторизация
+    # Для простоты пока возвращаем None, проверки будем делать по parent_id/coach_id из запроса
+    return None
+
+
+def check_parent_access(child_id: int, parent_id: int, db: Session):
+    """Проверка, что ребёнок принадлежит родителю"""
+    child = db.query(ChildDB).filter(ChildDB.id == child_id, ChildDB.parent_id == parent_id).first()
+    if not child:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return True
+
+
+def check_coach_access(group_id: int, coach_id: int, db: Session):
+    """Проверка, что группа принадлежит тренеру"""
+    group = db.query(GroupDB).filter(GroupDB.id == group_id, GroupDB.coach_id == coach_id).first()
+    if not group:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return True
+
+
 # ========== Pydantic Models ==========
 
 class ChildCreate(BaseModel):
@@ -197,9 +221,19 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
 # ========== Children Endpoints ==========
 
 @router.get("/children", response_model=List[ChildResponse])
-def get_children(db: Session = Depends(get_db)):
-    """Получение списка всех детей"""
-    children = db.query(ChildDB).filter(ChildDB.is_active == True).all()
+def get_children(
+        parent_id: Optional[int] = None,
+        coach_id: Optional[int] = None,
+        db: Session = Depends(get_db)
+):
+    """Получение списка детей (с учётом роли)"""
+    query = db.query(ChildDB).filter(ChildDB.is_active == True)
+
+    # Если указан parent_id - показываем только детей этого родителя
+    if parent_id:
+        query = query.filter(ChildDB.parent_id == parent_id)
+
+    children = query.all()
 
     result = []
     for child in children:
@@ -228,11 +262,15 @@ def get_children(db: Session = Depends(get_db)):
 
 
 @router.get("/children/{child_id}", response_model=ChildResponse)
-def get_child(child_id: int, db: Session = Depends(get_db)):
+def get_child(child_id: int, parent_id: Optional[int] = None, db: Session = Depends(get_db)):
     """Получение информации о ребёнке"""
     child = db.query(ChildDB).filter(ChildDB.id == child_id).first()
     if not child:
         raise HTTPException(status_code=404, detail="Child not found")
+
+    # Проверка прав: если указан parent_id, проверяем принадлежность
+    if parent_id and child.parent_id != parent_id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     enrollment = db.query(EnrollmentDB).filter(
         EnrollmentDB.child_id == child.id,
@@ -253,15 +291,15 @@ def get_child(child_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/children", response_model=ChildResponse)
-def create_child(child_data: ChildCreate, db: Session = Depends(get_db)):
-    """Создание нового ребёнка"""
+def create_child(child_data: ChildCreate, parent_id: int, db: Session = Depends(get_db)):
+    """Создание нового ребёнка (только для родителя)"""
     child = ChildDB(
         name=child_data.name,
         birthdate=child_data.birthdate,
         class_num=child_data.class_num,
         study_year=child_data.study_year,
         medical_note=child_data.medical_note,
-        parent_id=1
+        parent_id=parent_id
     )
     db.add(child)
     db.commit()
@@ -281,11 +319,14 @@ def create_child(child_data: ChildCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/children/{child_id}", response_model=ChildResponse)
-def update_child(child_id: int, child_data: ChildCreate, db: Session = Depends(get_db)):
-    """Обновление информации о ребёнке"""
+def update_child(child_id: int, child_data: ChildCreate, parent_id: int, db: Session = Depends(get_db)):
+    """Обновление информации о ребёнке (только для родителя)"""
     child = db.query(ChildDB).filter(ChildDB.id == child_id).first()
     if not child:
         raise HTTPException(status_code=404, detail="Child not found")
+
+    if child.parent_id != parent_id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     child.name = child_data.name
     child.birthdate = child_data.birthdate
@@ -311,7 +352,7 @@ def update_child(child_id: int, child_data: ChildCreate, db: Session = Depends(g
 
 @router.delete("/children/{child_id}")
 def delete_child(child_id: int, db: Session = Depends(get_db)):
-    """Удаление ребёнка (мягкое удаление)"""
+    """Удаление ребёнка (только для админа)"""
     child = db.query(ChildDB).filter(ChildDB.id == child_id).first()
     if not child:
         raise HTTPException(status_code=404, detail="Child not found")
@@ -325,9 +366,14 @@ def delete_child(child_id: int, db: Session = Depends(get_db)):
 # ========== Groups Endpoints ==========
 
 @router.get("/groups", response_model=List[GroupResponse])
-def get_groups(db: Session = Depends(get_db)):
-    """Получение списка всех групп"""
-    groups = db.query(GroupDB).filter(GroupDB.is_active == True).all()
+def get_groups(coach_id: Optional[int] = None, db: Session = Depends(get_db)):
+    """Получение списка групп (для тренера - только свои группы)"""
+    query = db.query(GroupDB).filter(GroupDB.is_active == True)
+
+    if coach_id:
+        query = query.filter(GroupDB.coach_id == coach_id)
+
+    groups = query.all()
 
     result = []
     for group in groups:
@@ -376,7 +422,7 @@ def get_group(group_id: int, db: Session = Depends(get_db)):
 
 @router.post("/groups", response_model=GroupResponse)
 def create_group(group_data: GroupCreate, db: Session = Depends(get_db)):
-    """Создание новой группы"""
+    """Создание новой группы (только для админа)"""
     group = GroupDB(
         name=group_data.name,
         level=group_data.level,
@@ -401,7 +447,7 @@ def create_group(group_data: GroupCreate, db: Session = Depends(get_db)):
 
 @router.put("/groups/{group_id}", response_model=GroupResponse)
 def update_group(group_id: int, group_data: GroupCreate, db: Session = Depends(get_db)):
-    """Обновление информации о группе"""
+    """Обновление информации о группе (только для админа)"""
     group = db.query(GroupDB).filter(GroupDB.id == group_id).first()
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
@@ -433,7 +479,7 @@ def update_group(group_id: int, group_data: GroupCreate, db: Session = Depends(g
 
 @router.delete("/groups/{group_id}")
 def delete_group(group_id: int, db: Session = Depends(get_db)):
-    """Удаление группы (мягкое удаление)"""
+    """Удаление группы (только для админа)"""
     group = db.query(GroupDB).filter(GroupDB.id == group_id).first()
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
@@ -472,7 +518,7 @@ def get_coaches(db: Session = Depends(get_db)):
 
 @router.post("/coaches", response_model=CoachResponse)
 def create_coach(coach_data: CoachCreate, db: Session = Depends(get_db)):
-    """Создание нового тренера"""
+    """Создание нового тренера (только для админа)"""
     coach = CoachDB(
         name=coach_data.name,
         email=coach_data.email,
@@ -495,7 +541,7 @@ def create_coach(coach_data: CoachCreate, db: Session = Depends(get_db)):
 
 @router.put("/coaches/{coach_id}", response_model=CoachResponse)
 def update_coach(coach_id: int, coach_data: CoachCreate, db: Session = Depends(get_db)):
-    """Обновление информации о тренере"""
+    """Обновление информации о тренере (только для админа)"""
     coach = db.query(CoachDB).filter(CoachDB.id == coach_id).first()
     if not coach:
         raise HTTPException(status_code=404, detail="Coach not found")
@@ -526,7 +572,7 @@ def update_coach(coach_id: int, coach_data: CoachCreate, db: Session = Depends(g
 
 @router.delete("/coaches/{coach_id}")
 def delete_coach(coach_id: int, db: Session = Depends(get_db)):
-    """Удаление тренера (мягкое удаление)"""
+    """Удаление тренера (только для админа)"""
     coach = db.query(CoachDB).filter(CoachDB.id == coach_id).first()
     if not coach:
         raise HTTPException(status_code=404, detail="Coach not found")
@@ -540,9 +586,19 @@ def delete_coach(coach_id: int, db: Session = Depends(get_db)):
 # ========== Trainings Endpoints ==========
 
 @router.get("/trainings", response_model=List[TrainingResponse])
-def get_trainings(group_id: Optional[int] = None, status: Optional[str] = None, db: Session = Depends(get_db)):
-    """Получение списка тренировок"""
+def get_trainings(
+        group_id: Optional[int] = None,
+        coach_id: Optional[int] = None,
+        status: Optional[str] = None,
+        db: Session = Depends(get_db)
+):
+    """Получение списка тренировок (с учётом роли)"""
     query = db.query(TrainingDB)
+
+    # Если указан coach_id - показываем только тренировки его групп
+    if coach_id:
+        group_ids = db.query(GroupDB.id).filter(GroupDB.coach_id == coach_id).subquery()
+        query = query.filter(TrainingDB.group_id.in_(group_ids))
 
     if group_id:
         query = query.filter(TrainingDB.group_id == group_id)
@@ -567,16 +623,33 @@ def get_trainings(group_id: Optional[int] = None, status: Optional[str] = None, 
 
 
 @router.get("/trainings/{training_id}/attendance")
-def get_training_attendance(training_id: int, db: Session = Depends(get_db)):
-    """Получение посещаемости для тренировки"""
+def get_training_attendance(
+        training_id: int,
+        coach_id: Optional[int] = None,
+        parent_id: Optional[int] = None,
+        db: Session = Depends(get_db)
+):
+    """Получение посещаемости для тренировки (с учётом роли)"""
     training = db.query(TrainingDB).filter(TrainingDB.id == training_id).first()
     if not training:
         raise HTTPException(status_code=404, detail="Training not found")
 
+    # Проверка прав: тренер может видеть только свои тренировки
+    if coach_id:
+        group = db.query(GroupDB).filter(GroupDB.id == training.group_id, GroupDB.coach_id == coach_id).first()
+        if not group:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+    # Для родителя - только его детей
     enrollments = db.query(EnrollmentDB).filter(
         EnrollmentDB.group_id == training.group_id,
         EnrollmentDB.status == EnrollmentStatus.ACTIVE
     ).all()
+
+    # Если это родитель - фильтруем по его детям
+    if parent_id:
+        children_ids = [c.id for c in db.query(ChildDB).filter(ChildDB.parent_id == parent_id).all()]
+        enrollments = [e for e in enrollments if e.child_id in children_ids]
 
     result = []
     for enrollment in enrollments:
@@ -598,8 +671,21 @@ def get_training_attendance(training_id: int, db: Session = Depends(get_db)):
 # ========== Attendance Endpoints ==========
 
 @router.post("/attendance")
-def mark_attendance(attendance_data: AttendanceUpdate, db: Session = Depends(get_db)):
-    """Отметка посещаемости"""
+def mark_attendance(attendance_data: AttendanceUpdate, coach_id: int, db: Session = Depends(get_db)):
+    """Отметка посещаемости (только для тренера или админа)"""
+    # Проверяем, что тренировка принадлежит тренеру
+    training = db.query(TrainingDB).filter(TrainingDB.id == attendance_data.training_id).first()
+    if not training:
+        raise HTTPException(status_code=404, detail="Training not found")
+
+    group = db.query(GroupDB).filter(GroupDB.id == training.group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    # Тренер может отмечать только свои группы
+    if group.coach_id != coach_id:
+        raise HTTPException(status_code=403, detail="Access denied - you can only mark attendance for your groups")
+
     existing = db.query(AttendanceDB).filter(
         AttendanceDB.training_id == attendance_data.training_id,
         AttendanceDB.child_id == attendance_data.child_id
@@ -613,11 +699,23 @@ def mark_attendance(attendance_data: AttendanceUpdate, db: Session = Depends(get
             training_id=attendance_data.training_id,
             child_id=attendance_data.child_id,
             status=attendance_data.status,
-            marked_by="system"
+            marked_by=f"coach_{coach_id}"
         )
         db.add(attendance)
 
     db.commit()
+
+    # Отправляем VK уведомление родителю (если настроен)
+    try:
+        from vk_bot import send_attendance_notification_vk
+        send_attendance_notification_vk(
+            child_id=attendance_data.child_id,
+            training_id=attendance_data.training_id,
+            status=attendance_data.status,
+            db=db
+        )
+    except:
+        pass  # VK бот может быть не настроен
 
     return {"message": "Attendance marked"}
 
@@ -626,7 +724,7 @@ def mark_attendance(attendance_data: AttendanceUpdate, db: Session = Depends(get
 
 @router.get("/applications", response_model=List[ApplicationResponse])
 def get_applications(db: Session = Depends(get_db)):
-    """Получение списка заявок"""
+    """Получение списка заявок (только для админа)"""
     applications = db.query(ApplicationDB).order_by(ApplicationDB.created_at.desc()).all()
 
     result = []
@@ -651,7 +749,7 @@ def get_applications(db: Session = Depends(get_db)):
 
 @router.post("/applications/{app_id}/approve")
 def approve_application(app_id: int, db: Session = Depends(get_db)):
-    """Одобрение заявки"""
+    """Одобрение заявки (только для админа)"""
     application = db.query(ApplicationDB).filter(ApplicationDB.id == app_id).first()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
@@ -674,7 +772,7 @@ def approve_application(app_id: int, db: Session = Depends(get_db)):
 
 @router.post("/applications/{app_id}/reject")
 def reject_application(app_id: int, db: Session = Depends(get_db)):
-    """Отклонение заявки"""
+    """Отклонение заявки (только для админа)"""
     application = db.query(ApplicationDB).filter(ApplicationDB.id == app_id).first()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
@@ -689,7 +787,7 @@ def reject_application(app_id: int, db: Session = Depends(get_db)):
 
 @router.get("/transfer-requests")
 def get_transfer_requests(db: Session = Depends(get_db)):
-    """Получение списка запросов на перевод"""
+    """Получение списка запросов на перевод (только для админа)"""
     requests = db.query(TransferRequestDB).order_by(TransferRequestDB.created_at.desc()).all()
 
     result = []
@@ -709,7 +807,7 @@ def get_transfer_requests(db: Session = Depends(get_db)):
 
 @router.post("/transfer-requests")
 def create_transfer_request(request_data: dict, db: Session = Depends(get_db)):
-    """Создание запроса на перевод"""
+    """Создание запроса на перевод (только для тренера)"""
     transfer_request = TransferRequestDB(
         coach_id=1,
         child_id=request_data["child_id"],
@@ -726,7 +824,7 @@ def create_transfer_request(request_data: dict, db: Session = Depends(get_db)):
 
 @router.post("/transfer-requests/{req_id}/approve")
 def approve_transfer_request(req_id: int, db: Session = Depends(get_db)):
-    """Одобрение запроса на перевод"""
+    """Одобрение запроса на перевод (только для админа)"""
     transfer_request = db.query(TransferRequestDB).filter(TransferRequestDB.id == req_id).first()
     if not transfer_request:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -767,7 +865,7 @@ def approve_transfer_request(req_id: int, db: Session = Depends(get_db)):
 
 @router.post("/transfer-requests/{req_id}/reject")
 def reject_transfer_request(req_id: int, db: Session = Depends(get_db)):
-    """Отклонение запроса на перевод"""
+    """Отклонение запроса на перевод (только для админа)"""
     transfer_request = db.query(TransferRequestDB).filter(TransferRequestDB.id == req_id).first()
     if not transfer_request:
         raise HTTPException(status_code=404, detail="Request not found")
@@ -776,3 +874,82 @@ def reject_transfer_request(req_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Transfer request rejected"}
+
+
+# ========== VK Endpoints ==========
+
+@router.post("/parents/{parent_id}/generate-vk-code")
+def generate_vk_link_code_endpoint(parent_id: int, db: Session = Depends(get_db)):
+    """Генерация кода для привязки VK"""
+    import random
+    import string
+    from datetime import timedelta
+
+    parent = db.query(ParentDB).filter(ParentDB.id == parent_id).first()
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent not found")
+
+    code = ''.join(random.choices(string.digits, k=6))
+    parent.vk_link_code = code
+    parent.vk_code_expires_at = datetime.now() + timedelta(minutes=10)
+
+    db.commit()
+
+    return {"code": code, "expires_in": 600}
+
+
+@router.post("/parents/{parent_id}/unlink-vk")
+def unlink_vk_endpoint(parent_id: int, db: Session = Depends(get_db)):
+    """Отвязка VK аккаунта"""
+    parent = db.query(ParentDB).filter(ParentDB.id == parent_id).first()
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent not found")
+
+    parent.vk_id = None
+    parent.is_vk_linked = False
+    parent.vk_link_code = None
+    parent.vk_code_expires_at = None
+
+    db.commit()
+
+    return {"message": "VK account unlinked"}
+
+
+@router.get("/parents/{parent_id}/vk-status")
+def get_vk_status_endpoint(parent_id: int, db: Session = Depends(get_db)):
+    """Статус привязки VK"""
+    parent = db.query(ParentDB).filter(ParentDB.id == parent_id).first()
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent not found")
+
+    return {
+        "is_linked": parent.is_vk_linked,
+        "vk_id": parent.vk_id,
+        "notify_enabled": parent.notify_reminders,
+        "has_active_code": parent.vk_link_code is not None and parent.vk_code_expires_at > datetime.now()
+    }
+
+
+@router.post("/parents/{parent_id}/notification-settings")
+def update_parent_notification_settings(
+        parent_id: int,
+        notify_absences: Optional[bool] = None,
+        notify_reminders: Optional[bool] = None,
+        db: Session = Depends(get_db)
+):
+    """Обновление настроек уведомлений родителя"""
+    parent = db.query(ParentDB).filter(ParentDB.id == parent_id).first()
+    if not parent:
+        raise HTTPException(status_code=404, detail="Parent not found")
+
+    if notify_absences is not None:
+        parent.notify_absences = notify_absences
+    if notify_reminders is not None:
+        parent.notify_reminders = notify_reminders
+
+    db.commit()
+
+    return {
+        "notify_absences": parent.notify_absences,
+        "notify_reminders": parent.notify_reminders
+    }

@@ -22,10 +22,10 @@ class UserRole(str, enum.Enum):
     ADMIN = "admin"
 
 class EnrollmentStatus(str, enum.Enum):
-    ACTIVE = "active"          # ходит
-    FROZEN = "frozen"          # заморожен
-    COMPLETED = "completed"    # переведён/откреплён
-    WAITING_LIST = "waiting_list"  # в листе ожидания
+    ACTIVE = "active"
+    FROZEN = "frozen"
+    COMPLETED = "completed"
+    WAITING_LIST = "waiting_list"
 
 class TrainingStatus(str, enum.Enum):
     SCHEDULED = "scheduled"
@@ -58,23 +58,21 @@ class ParentDB(Base):
     phone = Column(String)
     password = Column(String, nullable=False)
 
-    # VK
     is_vk_linked = Column(Boolean, default=False)
     vk_id = Column(Integer, unique=True, nullable=True)
     vk_link_code = Column(String(6), nullable=True)
     vk_code_expires_at = Column(DateTime, nullable=True)
 
-    # Настройки уведомлений
     notify_absences = Column(Boolean, default=True)
     notify_reminders = Column(Boolean, default=True)
 
     is_active = Column(Boolean, default=True)
     created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
 
-    # Связи
     children = relationship("ChildDB", back_populates="parent", cascade="all, delete-orphan")
     applications = relationship("ApplicationDB", back_populates="parent")
     notifications = relationship("NotificationDB", back_populates="parent")
+
 
 # ========== ТАБЛИЦА ДЕТЕЙ ==========
 class ChildDB(Base):
@@ -90,7 +88,6 @@ class ChildDB(Base):
     medical_date = Column(Date)
     is_active = Column(Boolean, default=True)
 
-    # Связи
     parent = relationship("ParentDB", back_populates="children")
     enrollments = relationship("EnrollmentDB", back_populates="child")
     attendances = relationship("AttendanceDB", back_populates="child")
@@ -109,7 +106,6 @@ class CoachDB(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
 
-    # Связи
     groups = relationship("GroupDB", back_populates="coach")
     transfer_requests = relationship("TransferRequestDB", back_populates="coach")
 
@@ -126,7 +122,6 @@ class GroupDB(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
 
-    # Связи
     coach = relationship("CoachDB", back_populates="groups")
     time_slots = relationship("TimeSlotDB", back_populates="group", cascade="all, delete-orphan")
     enrollments = relationship("EnrollmentDB", back_populates="group")
@@ -151,7 +146,6 @@ class TimeSlotDB(Base):
         UniqueConstraint('group_id', 'day_of_week', 'start_time', name='uq_group_day_time'),
     )
 
-    # Связи
     group = relationship("GroupDB", back_populates="time_slots")
     trainings = relationship("TrainingDB", back_populates="time_slot")
 
@@ -167,7 +161,6 @@ class TrainingDB(Base):
     end_time = Column(Time, nullable=False)
     status = Column(SQLEnum(TrainingStatus), default=TrainingStatus.SCHEDULED)
 
-    # Связи
     group = relationship("GroupDB", back_populates="trainings")
     time_slot = relationship("TimeSlotDB", back_populates="trainings")
     attendances = relationship("AttendanceDB", back_populates="training")
@@ -184,7 +177,6 @@ class EnrollmentDB(Base):
     end_date = Column(Date, nullable=True)
     created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
 
-    # Связи
     child = relationship("ChildDB", back_populates="enrollments")
     group = relationship("GroupDB", back_populates="enrollments")
 
@@ -199,7 +191,6 @@ class AttendanceDB(Base):
     marked_by = Column(String)
     marked_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
 
-    # Связи
     training = relationship("TrainingDB", back_populates="attendances")
     child = relationship("ChildDB", back_populates="attendances")
 
@@ -215,7 +206,6 @@ class ApplicationDB(Base):
     admin_comment = Column(String)
     created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
 
-    # Для публичных заявок
     public_parent_name = Column(String)
     public_parent_phone = Column(String)
     public_parent_email = Column(String)
@@ -226,7 +216,6 @@ class ApplicationDB(Base):
     public_child_medical_note = Column(String)
     public_child_medical_date = Column(Date)
 
-    # Связи
     parent = relationship("ParentDB", back_populates="applications")
     group = relationship("GroupDB", back_populates="applications")
 
@@ -242,7 +231,6 @@ class TransferHistoryDB(Base):
     created_by = Column(String)
     created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
 
-    # Связи
     child = relationship("ChildDB", back_populates="transfer_history")
     from_group = relationship("GroupDB", foreign_keys=[from_group_id], back_populates="transfer_history_from")
     to_group = relationship("GroupDB", foreign_keys=[to_group_id], back_populates="transfer_history_to")
@@ -261,7 +249,6 @@ class TransferRequestDB(Base):
     admin_response = Column(String)
     created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
 
-    # Связи
     coach = relationship("CoachDB", back_populates="transfer_requests")
     child = relationship("ChildDB", back_populates="transfer_requests")
     from_group = relationship("GroupDB", foreign_keys=[from_group_id], back_populates="transfer_requests_from")
@@ -278,13 +265,10 @@ class NotificationDB(Base):
     is_read = Column(Boolean, default=False)
     created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
 
-    # Связи
     parent = relationship("ParentDB", back_populates="notifications")
-
 
 # ========== СОЗДАНИЕ ТАБЛИЦ ==========
 Base.metadata.create_all(bind=engine)
-
 
 # ========== ФУНКЦИИ ДЛЯ РАБОТЫ С БД ==========
 def get_db():

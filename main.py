@@ -137,7 +137,10 @@ async def index(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
     if user:
         return RedirectResponse(url="/dashboard")
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(
+        name = "index.html",
+        request = request,
+        context = {"request": request})
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -146,7 +149,10 @@ async def login_page(request: Request, error: str = None, message: str = None, d
     user = get_current_user(request, db)
     if user:
         return RedirectResponse(url="/dashboard")
-    return templates.TemplateResponse("login.html", {
+    return templates.TemplateResponse(
+        name = "login.html", 
+        request = request,
+        context = {
         "request": request,
         "error": error,
         "message": message
@@ -238,7 +244,10 @@ async def register_page(
     selected_group_id = int(group_id) if group_id else None
     form_data = {}
 
-    return templates.TemplateResponse("register.html", {
+    return templates.TemplateResponse(
+        name = "register.html",
+        request = request,
+        context = {
         "request": request,
         "groups": groups_data,
         "selected_group_id": selected_group_id,
@@ -298,7 +307,10 @@ async def register(
     db.add(application)
     db.commit()
 
-    return templates.TemplateResponse("login.html", {
+    return templates.TemplateResponse(
+        name = "login.html", 
+        request = request,
+        context = {
         "request": request,
         "message": "Заявка успешно отправлена! После рассмотрения администратором вы получите доступ к системе."
     })
@@ -360,7 +372,10 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
 
     user["children"] = user_children
 
-    return templates.TemplateResponse("dashboard.html", {
+    return templates.TemplateResponse(
+        name = "dashboard.html", 
+        request = request,
+        context = {
         "request": request,
         "user": user,
         "stats": stats
@@ -398,7 +413,10 @@ async def children_list(request: Request, db: Session = Depends(get_db)):
             "is_active": child.is_active
         })
 
-    return templates.TemplateResponse("children.html", {
+    return templates.TemplateResponse(
+        name = "children.html", 
+        request = request,
+        context = {
         "request": request,
         "user": user,
         "children": children_data
@@ -412,7 +430,10 @@ async def add_child_page(request: Request, db: Session = Depends(get_db)):
     if not user or user["role"] != "parent":
         return RedirectResponse(url="/dashboard")
 
-    return templates.TemplateResponse("child_form.html", {
+    return templates.TemplateResponse(
+        name = "child_form.html", 
+        request = request,
+        context = {
         "request": request,
         "user": user,
         "title": "Добавить ребёнка",
@@ -460,7 +481,10 @@ async def edit_child_page(request: Request, child_id: int, db: Session = Depends
     if not child:
         return RedirectResponse(url="/children")
 
-    return templates.TemplateResponse("child_form.html", {
+    return templates.TemplateResponse(
+        name = "child_form.html", 
+        request = request,
+        context = {
         "request": request,
         "user": user,
         "title": "Редактировать ребёнка",
@@ -546,7 +570,10 @@ async def groups_list(request: Request, db: Session = Depends(get_db)):
             "age_range": "6-16"
         })
 
-    return templates.TemplateResponse("groups.html", {
+    return templates.TemplateResponse(
+        name = "groups.html", 
+        request = request,
+        context = {
         "request": request,
         "user": user,
         "groups": groups_data
@@ -562,7 +589,10 @@ async def add_group_page(request: Request, db: Session = Depends(get_db)):
 
     coaches = db.query(CoachDB).filter(CoachDB.is_active == True).all()
 
-    return templates.TemplateResponse("group_form.html", {
+    return templates.TemplateResponse(
+        name = "group_form.html", 
+        request = request,
+        context = {
         "request": request,
         "user": user,
         "title": "Создать группу",
@@ -610,7 +640,10 @@ async def edit_group_page(request: Request, group_id: int, db: Session = Depends
 
     coaches = db.query(CoachDB).filter(CoachDB.is_active == True).all()
 
-    return templates.TemplateResponse("group_form.html", {
+    return templates.TemplateResponse(
+        name = "group_form.html", 
+        request = request,
+        context = {
         "request": request,
         "user": user,
         "title": "Редактировать группу",
@@ -685,7 +718,10 @@ async def trainers_list(request: Request, db: Session = Depends(get_db)):
             "is_active": coach.is_active
         })
 
-    return templates.TemplateResponse("trainers.html", {
+    return templates.TemplateResponse(
+        name = "trainers.html", 
+        request = request,
+        context = {
         "request": request,
         "user": user,
         "coaches": coaches_data
@@ -699,7 +735,10 @@ async def add_trainer_page(request: Request, db: Session = Depends(get_db)):
     if not user or user["role"] != "admin":
         return RedirectResponse(url="/dashboard")
 
-    return templates.TemplateResponse("trainer_form.html", {
+    return templates.TemplateResponse(
+        name = "trainer_form.html", 
+        request = request,
+        context = {
         "request": request,
         "user": user,
         "title": "Добавить тренера",
@@ -724,13 +763,16 @@ async def add_trainer(
     # Проверяем, не существует ли уже такой email
     existing = db.query(CoachDB).filter(CoachDB.email == email).first()
     if existing:
-        return templates.TemplateResponse("trainer_form.html", {
-            "request": request,
-            "user": user,
-            "title": "Добавить тренера",
-            "coach": {},
-            "error": "Тренер с таким email уже существует"
-        })
+        return templates.TemplateResponse(
+            name = "trainer_form.html", 
+            request = request,
+            context = {
+                "request": request,
+                "user": user,
+                "title": "Добавить тренера",
+                "coach": {},
+                "error": "Тренер с таким email уже существует"
+            })
 
     coach = CoachDB(
         name=name,
@@ -755,12 +797,15 @@ async def edit_trainer_page(request: Request, coach_id: int, db: Session = Depen
     if not coach:
         return RedirectResponse(url="/trainers")
 
-    return templates.TemplateResponse("trainer_form.html", {
-        "request": request,
-        "user": user,
-        "title": "Редактировать тренера",
-        "coach": coach
-    })
+    return templates.TemplateResponse(
+        name = "trainer_form.html", 
+        request = request,
+        context = {
+            "request": request,
+            "user": user,
+            "title": "Редактировать тренера",
+            "coach": coach
+        })
 
 
 @app.post("/trainers/{coach_id}/edit")
@@ -852,13 +897,16 @@ async def trainings_list(
 
     groups = groups_query.all()
 
-    return templates.TemplateResponse("trainings.html", {
-        "request": request,
-        "user": user,
-        "trainings": trainings_data,
-        "groups": groups,
-        "filters": {"group_id": group_id, "status": status}
-    })
+    return templates.TemplateResponse(
+        name = "trainings.html", 
+        request = request,
+        context = {
+            "request": request,
+            "user": user,
+            "trainings": trainings_data,
+            "groups": groups,
+            "filters": {"group_id": group_id, "status": status}
+        })
 
 
 # ========== ПОСЕЩАЕМОСТЬ ==========
@@ -918,13 +966,16 @@ async def attendance_page(
                     "status": attendance.status.value if attendance else "not_marked"
                 })
 
-    return templates.TemplateResponse("attendance.html", {
-        "request": request,
-        "user": user,
-        "trainings": trainings_data,
-        "selected_training_id": training_id,
-        "attendance_list": attendance_list
-    })
+    return templates.TemplateResponse(
+        name = "attendance.html", 
+        request = request,
+        context = {
+            "request": request,
+            "user": user,
+            "trainings": trainings_data,
+            "selected_training_id": training_id,
+            "attendance_list": attendance_list
+        })
 
 
 @app.post("/attendance/save")
@@ -1046,12 +1097,15 @@ async def applications_list(
             "group_is_full": group_is_full
         })
 
-    return templates.TemplateResponse("applications.html", {
-        "request": request,
-        "user": user,
-        "applications": apps_data,
-        "filters": {"status": status}
-    })
+    return templates.TemplateResponse(
+        name = "applications.html", 
+        request = request,
+        context = {
+            "request": request,
+            "user": user,
+            "applications": apps_data,
+            "filters": {"status": status}
+        })
 
 
 # main.py - найдите функцию application_detail и замените её:
@@ -1129,11 +1183,14 @@ async def application_detail(request: Request, app_id: int, db: Session = Depend
         "admin_comment": application.admin_comment
     }
 
-    return templates.TemplateResponse("application_detail.html", {
-        "request": request,
-        "user": user,
-        "application": app_data
-    })
+    return templates.TemplateResponse(
+        name = "application_detail.html", 
+        request = request,
+        context = {
+            "request": request,
+            "user": user,
+            "application": app_data
+        })
 
 @app.get("/applications/{app_id}/approve")
 async def approve_application(request: Request, app_id: int, db: Session = Depends(get_db)):
@@ -1274,11 +1331,14 @@ async def transfers_list(request: Request, db: Session = Depends(get_db)):
             "created_at": transfer.created_at
         })
 
-    return templates.TemplateResponse("transfers.html", {
-        "request": request,
-        "user": user,
-        "transfers": transfers_data
-    })
+    return templates.TemplateResponse(
+        name = "transfers.html", 
+        request = request,
+        context = {
+            "request": request,
+            "user": user,
+            "transfers": transfers_data
+        })
 
 
 @app.get("/transfers/add", response_class=HTMLResponse)
@@ -1312,12 +1372,15 @@ async def add_transfer_page(request: Request, db: Session = Depends(get_db)):
 
     groups = db.query(GroupDB).filter(GroupDB.is_active == True).all()
 
-    return templates.TemplateResponse("transfer_form.html", {
-        "request": request,
-        "user": user,
-        "children": children_data,
-        "groups": groups
-    })
+    return templates.TemplateResponse(
+        name = "transfer_form.html", 
+        request = request,
+        context = {
+            "request": request,
+            "user": user,
+            "children": children_data,
+            "groups": groups
+        })
 
 
 @app.post("/transfers/add")
@@ -1425,12 +1488,15 @@ async def profile_page(request: Request, db: Session = Depends(get_db)):
         parent.vk_code_expires_at = datetime.now() + timedelta(minutes=10)
         db.commit()
 
-    return templates.TemplateResponse("profile.html", {
-        "request": request,
-        "user": user,
-        "parent": parent,
-        "vk_code": vk_code
-    })
+    return templates.TemplateResponse(
+        name = "profile.html", 
+        request = request,
+        context = {
+            "request": request,
+            "user": user,
+            "parent": parent,
+            "vk_code": vk_code
+        })
 
 
 @app.post("/profile")
@@ -1460,12 +1526,15 @@ async def update_profile(
 
     if password:
         if password != confirm_password:
-            return templates.TemplateResponse("profile.html", {
-                "request": request,
-                "user": user,
-                "parent": parent,
-                "error": "Пароли не совпадают"
-            })
+            return templates.TemplateResponse(
+                name = "profile.html", 
+                request = request,
+                context = {
+                    "request": request,
+                    "user": user,
+                    "parent": parent,
+                    "error": "Пароли не совпадают"
+                })
         parent.password = password
 
     db.commit()
@@ -1476,12 +1545,15 @@ async def update_profile(
         sessions[session_id]["name"] = name
         sessions[session_id]["email"] = email
 
-    return templates.TemplateResponse("profile.html", {
-        "request": request,
-        "user": user,
-        "parent": parent,
-        "success": "Профиль обновлён"
-    })
+    return templates.TemplateResponse(
+        name = "profile.html", 
+        request = request,
+        context = {
+            "request": request,
+            "user": user,
+            "parent": parent,
+            "success": "Профиль обновлён"
+        })
 
 
 @app.get("/profile/unlink-vk")

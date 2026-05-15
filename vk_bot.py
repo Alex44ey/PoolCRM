@@ -21,13 +21,13 @@ from database import (
 # ВСТАВЬТЕ ВАШ ТОКЕН ПОЛЬЗОВАТЕЛЯ!
 # Получить токен можно здесь: https://vkhost.github.io/
 # Выберите разрешения: messages, offline
-VK_USER_TOKEN = "YOUR_VK_TOKEN_HERE"  # ЗАМЕНИТЕ НА ВАШ ТОКЕН!
+VK_USER_TOKEN = "vk1.a.pyfkac7ghRZAJ8sQPjOdAAjAEJaf2Gp3MRPCNypYLE9nVs7y6y43bulnFpyzVTRJGp06Ul5CmHiOHcld3JjeS53txVob2elSdq1YMrZOibj324gqmUz6exQ6t4RVgn4fm91o-zW27JVF_e02ZvtQ03T5dH2mMs_BR691yEZxxgCbxwS81VW8aPWU8LfLTfvzkoBNOYJMWMQSbWLPR6U4Tw"  # ЗАМЕНИТЕ НА ВАШ ТОКЕН!
 
 # ID вашего сообщества (если есть)
 VK_GROUP_ID = 0
 
 # Включить/выключить бота
-VK_ENABLED = False  # Поставьте True после настройки токена
+VK_ENABLED = True  # Поставьте True после настройки токена
 
 VK_API_VERSION = "5.131"
 

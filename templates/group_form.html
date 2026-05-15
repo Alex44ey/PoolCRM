@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div class="logo">
+        <h1>🐬 Pool CRM</h1>
+        <p>Система управления бассейном</p>
+    </div>
+    <div class="user-info">
+        <span class="user-name">{{ user.name }}</span>
+        <span class="user-role">Администратор</span>
+        <a href="/logout" class="logout-btn">Выйти</a>
+    </div>
+</div>
+
+<div class="nav-menu">
+    <a href="/dashboard" class="nav-link">📊 Дашборд</a>
+    <a href="/children" class="nav-link">👶 Дети</a>
+    <a href="/groups" class="nav-link active">👥 Группы</a>
+    <a href="/trainers" class="nav-link">🏊‍♂️ Тренеры</a>
+    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
+    <a href="/attendance" class="nav-link">📊 Посещаемость</a>
+    <a href="/applications" class="nav-link">📋 Заявки</a>
+    <a href="/transfers" class="nav-link">🔄 Переводы</a>
+</div>
+
+<div class="content">
+    <h2>{{ title }}</h2>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST">
+        <div class="form-group">
+            <label class="required">Название группы</label>
+            <input type="text" name="name" required value="{{ group.name|default('') }}">
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="required">Уровень (0-5)</label>
+                <input type="number" name="level" min="0" max="5" required value="{{ group.level|default('') }}">
+            </div>
+            <div class="form-group">
+                <label class="required">Максимальное количество</label>
+                <input type="number" name="max_capacity" min="1" max="30" required value="{{ group.max_capacity|default(12) }}">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>Мин. возраст (лет)</label>
+                <input type="number" name="min_age" step="0.5" value="{{ group.min_age|default('') }}">
+            </div>
+            <div class="form-group">
+                <label>Макс. возраст (лет)</label>
+                <input type="number" name="max_age" step="0.5" value="{{ group.max_age|default('') }}">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Тренер</label>
+            <select name="coach_id">
+                <option value="">-- Не назначен --</option>
+                {% for coach in coaches %}
+                <option value="{{ coach.id }}" {% if group.coach_id == coach.id %}selected{% endif %}>
+                    {{ coach.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="display: flex; gap: 15px; margin-top: 30px;">
+            <button type="submit" class="btn btn-primary">Сохранить</button>
+            <a href="/groups" class="btn btn-secondary">Отмена</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

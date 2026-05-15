@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Заявка #{{ application.id }}{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div class="logo">
+        <h1>🐬 Pool CRM</h1>
+        <p>Система управления бассейном</p>
+    </div>
+    <div class="user-info">
+        <span class="user-name">{{ user.name }}</span>
+        <span class="user-role">Администратор</span>
+        <a href="/logout" class="logout-btn">Выйти</a>
+    </div>
+</div>
+
+<div class="nav-menu">
+    <a href="/dashboard" class="nav-link">📊 Дашборд</a>
+    <a href="/children" class="nav-link">👶 Дети</a>
+    <a href="/groups" class="nav-link">👥 Группы</a>
+    <a href="/trainers" class="nav-link">🏊‍♂️ Тренеры</a>
+    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
+    <a href="/attendance" class="nav-link">📊 Посещаемость</a>
+    <a href="/applications" class="nav-link active">📋 Заявки</a>
+    <a href="/transfers" class="nav-link">🔄 Переводы</a>
+</div>
+
+<div class="content">
+    <div class="action-bar">
+        <h2>Заявка #{{ application.id }}</h2>
+        <a href="/applications" class="btn btn-secondary">← Назад к списку</a>
+    </div>
+
+    {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+        <!-- Информация о родителе -->
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px;">
+            <h3 style="color: #667eea; margin-bottom: 15px;">👨‍👩‍👧 Информация о родителе</h3>
+            <p><strong>ФИО:</strong> {{ application.parent_name or application.public_parent_name }}</p>
+            <p><strong>Телефон:</strong> {{ application.parent_phone or application.public_parent_phone }}</p>
+            <p><strong>Email:</strong> {{ application.parent_email or application.public_parent_email }}</p>
+        </div>
+
+        <!-- Информация о ребёнке -->
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px;">
+            <h3 style="color: #667eea; margin-bottom: 15px;">👶 Информация о ребёнке</h3>
+            <p><strong>ФИО:</strong> {{ application.child_name or application.public_child_name }}</p>
+            <p><strong>Дата рождения:</strong> {{ application.child_birthdate or application.public_child_birthdate }}</p>
+            <p><strong>Класс:</strong> {{ application.child_class or application.public_child_class or '-' }}</p>
+            <p><strong>Год обучения:</strong> {{ application.child_study_year or application.public_child_study_year or '-' }}</p>
+            <p><strong>Мед. справка:</strong> 
+                {% if application.medical_cert_date or application.public_child_medical_date %}
+                    ✅ Да ({{ application.medical_cert_date or application.public_child_medical_date }})
+                {% else %}
+                    ❌ Нет
+                {% endif %}
+            </p>
+            <p><strong>Мед. показания:</strong> {{ application.medical_note or application.public_child_medical_note or 'Нет' }}</p>
+        </div>
+    </div>
+
+    <!-- Информация о группе -->
+    <div style="margin-top: 30px; background: #f8f9fa; padding: 20px; border-radius: 10px;">
+        <h3 style="color: #667eea; margin-bottom: 15px;">🏊 Желаемая группа</h3>
+        <p><strong>Название:</strong> {{ application.group_name }}</p>
+        <p><strong>Уровень:</strong> {{ application.group_level }}</p>
+        <p><strong>Заполненность:</strong> {{ application.group_current_enrollment }}/{{ application.group_max_capacity }}</p>
+        <p><strong>Тренер:</strong> {{ application.group_coach_name or 'Не назначен' }}</p>
+        
+        {% if application.group_is_full %}
+        <div class="alert alert-warning" style="margin-top: 10px;">⚠️ Группа заполнена</div>
+        {% endif %}
+    </div>
+
+    <!-- Действия -->
+    {% if application.status in ['new', 'on_review'] %}
+    <div style="margin-top: 30px; display: flex; gap: 15px; justify-content: center;">
+        <a href="/applications/{{ application.id }}/approve" class="btn btn-success" onclick="return confirm('Одобрить заявку?')">✅ Одобрить заявку</a>
+        <a href="/applications/{{ application.id }}/reject" class="btn btn-danger" onclick="return confirm('Отклонить заявку?')">❌ Отклонить</a>
+        {% if application.group_is_full %}
+        <a href="/applications/{{ application.id }}/waiting" class="btn btn-warning">📋 В лист ожидания</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Комментарий администратора -->
+    <form method="POST" action="/applications/{{ application.id }}/comment" style="margin-top: 30px;">
+        <div class="form-group">
+            <label>Комментарий администратора</label>
+            <textarea name="admin_comment" rows="3" placeholder="Добавьте комментарий...">{{ application.admin_comment|default('') }}</textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Сохранить комментарий</button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Группы{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div class="logo">
+        <h1>🐬 Pool CRM</h1>
+        <p>Система управления бассейном</p>
+    </div>
+    <div class="user-info">
+        <span class="user-name">{{ user.name }}</span>
+        <span class="user-role">
+            {% if user.role == 'admin' %}Администратор
+            {% elif user.role == 'coach' %}Тренер
+            {% else %}Родитель{% endif %}
+        </span>
+        <a href="/logout" class="logout-btn">Выйти</a>
+    </div>
+</div>
+
+<div class="nav-menu">
+    <a href="/dashboard" class="nav-link">📊 Дашборд</a>
+    {% if user.role == 'parent' %}
+    <a href="/children" class="nav-link">👶 Мои дети</a>
+    <a href="/profile" class="nav-link">⚙️ Настройки</a>
+    {% endif %}
+    {% if user.role == 'coach' %}
+    <a href="/groups" class="nav-link active">👥 Мои группы</a>
+    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
+    <a href="/attendance" class="nav-link">📊 Посещаемость</a>
+    <a href="/transfers" class="nav-link">🔄 Переводы</a>
+    {% endif %}
+    {% if user.role == 'admin' %}
+    <a href="/children" class="nav-link">👶 Дети</a>
+    <a href="/groups" class="nav-link active">👥 Группы</a>
+    <a href="/trainers" class="nav-link">🏊‍♂️ Тренеры</a>
+    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
+    <a href="/attendance" class="nav-link">📊 Посещаемость</a>
+    <a href="/applications" class="nav-link">📋 Заявки</a>
+    <a href="/transfers" class="nav-link">🔄 Переводы</a>
+    {% endif %}
+</div>
+
+<div class="content">
+    <div class="action-bar">
+        <h2>{% if user.role == 'coach' %}Мои группы{% else %}Управление группами{% endif %}</h2>
+        {% if user.role == 'admin' %}
+        <a href="/groups/add" class="btn btn-primary">+ Создать группу</a>
+        {% endif %}
+    </div>
+
+    {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Название</th>
+                <th>Уровень</th>
+                <th>Возрастной диапазон</th>
+                <th>Тренер</th>
+                <th>Макс. мест</th>
+                <th>Заполнено</th>
+                {% if user.role == 'admin' %}
+                <th>Действия</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for group in groups %}
+            <tr>
+                <td>{{ group.id }}</td>
+                <td>{{ group.name }}</td>
+                <td>{{ group.level }}</td>
+                <td>{{ group.age_range }}</td>
+                <td>{{ group.coach_name or 'Не назначен' }}</td>
+                <td>{{ group.max_capacity }}</td>
+                <td>{{ group.current_enrollment }}/{{ group.max_capacity }}</td>
+                {% if user.role == 'admin' %}
+                <td>
+                    <a href="/groups/{{ group.id }}/edit" class="btn btn-sm btn-primary">✏️</a>
+                    <a href="/groups/{{ group.id }}/delete" class="btn btn-sm btn-danger" onclick="return confirm('Удалить группу?')">🗑️</a>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

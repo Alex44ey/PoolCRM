@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Создать запрос на перевод{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div class="logo">
+        <h1>🐬 Pool CRM</h1>
+        <p>Система управления бассейном</p>
+    </div>
+    <div class="user-info">
+        <span class="user-name">{{ user.name }}</span>
+        <span class="user-role">Тренер</span>
+        <a href="/logout" class="logout-btn">Выйти</a>
+    </div>
+</div>
+
+<div class="nav-menu">
+    <a href="/dashboard" class="nav-link">📊 Дашборд</a>
+    <a href="/groups" class="nav-link">👥 Мои группы</a>
+    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
+    <a href="/attendance" class="nav-link">📊 Посещаемость</a>
+    <a href="/transfers" class="nav-link active">🔄 Переводы</a>
+</div>
+
+<div class="content">
+    <h2>Создать запрос на перевод</h2>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST">
+        <div class="form-group">
+            <label class="required">Ребёнок</label>
+            <select name="child_id" required>
+                <option value="">-- Выберите ребёнка --</option>
+                {% for child in children %}
+                <option value="{{ child.id }}">{{ child.name }} ({{ child.group_name|default('без группы') }})</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label class="required">Текущая группа</label>
+            <select name="from_group_id" required>
+                <option value="">-- Выберите группу --</option>
+                {% for group in groups %}
+                <option value="{{ group.id }}">{{ group.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Предлагаемая группа</label>
+            <select name="suggested_group_id">
+                <option value="">-- Не выбрана --</option>
+                {% for group in groups %}
+                <option value="{{ group.id }}">{{ group.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Комментарий</label>
+            <textarea name="comment" rows="3" placeholder="Укажите причину перевода..."></textarea>
+        </div>
+
+        <div style="display: flex; gap: 15px; margin-top: 30px;">
+            <button type="submit" class="btn btn-primary">Отправить запрос</button>
+            <a href="/transfers" class="btn btn-secondary">Отмена</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Заявки{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div class="logo">
+        <h1>🐬 Pool CRM</h1>
+        <p>Система управления бассейном</p>
+    </div>
+    <div class="user-info">
+        <span class="user-name">{{ user.name }}</span>
+        <span class="user-role">Администратор</span>
+        <a href="/logout" class="logout-btn">Выйти</a>
+    </div>
+</div>
+
+<div class="nav-menu">
+    <a href="/dashboard" class="nav-link">📊 Дашборд</a>
+    <a href="/children" class="nav-link">👶 Дети</a>
+    <a href="/groups" class="nav-link">👥 Группы</a>
+    <a href="/trainers" class="nav-link">🏊‍♂️ Тренеры</a>
+    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
+    <a href="/attendance" class="nav-link">📊 Посещаемость</a>
+    <a href="/applications" class="nav-link active">📋 Заявки</a>
+    <a href="/transfers" class="nav-link">🔄 Переводы</a>
+</div>
+
+<div class="content">
+    <div class="action-bar">
+        <h2>Заявки на зачисление</h2>
+    </div>
+
+    {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+
+    <div class="filters-bar">
+        <div class="filter-group">
+            <label>Статус</label>
+            <select name="status" onchange="this.form.submit()" form="filterForm">
+                <option value="">Все</option>
+                <option value="new" {% if filters.status == 'new' %}selected{% endif %}>Новые</option>
+                <option value="on_review" {% if filters.status == 'on_review' %}selected{% endif %}>На рассмотрении</option>
+                <option value="approved" {% if filters.status == 'approved' %}selected{% endif %}>Одобренные</option>
+                <option value="rejected" {% if filters.status == 'rejected' %}selected{% endif %}>Отклоненные</option>
+                <option value="waiting_list" {% if filters.status == 'waiting_list' %}selected{% endif %}>Лист ожидания</option>
+            </select>
+        </div>
+    </div>
+
+    <form id="filterForm" method="GET" style="display: none;"></form>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Родитель</th>
+                <th>Ребёнок</th>
+                <th>Группа</th>
+                <th>Дата рождения</th>
+                <th>Мед. справка</th>
+                <th>Статус</th>
+                <th>Дата заявки</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for app in applications %}
+            <tr>
+                <td>{{ app.id }}</td>
+                <td>
+                    {% if app.parent_name %}
+                        {{ app.parent_name }}<br>
+                        <small>{{ app.parent_phone }}<br>{{ app.parent_email }}</small>
+                    {% else %}
+                        {{ app.public_parent_name }}<br>
+                        <small>{{ app.public_parent_phone }}<br>{{ app.public_parent_email }}</small>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if app.child_name %}
+                        {{ app.child_name }}
+                    {% else %}
+                        {{ app.public_child_name }}
+                    {% endif %}
+                </td>
+                <td>{{ app.group_name }}</td>
+                <td>
+                    {% if app.child_birthdate %}
+                        {{ app.child_birthdate }}
+                    {% else %}
+                        {{ app.public_child_birthdate }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if app.medical_cert_date %}
+                        ✅ {{ app.medical_cert_date }}
+                    {% else %}
+                        ❌ Нет
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="status-badge 
+                        {% if app.status == 'approved' %}status-approved
+                        {% elif app.status == 'rejected' %}status-rejected
+                        {% elif app.status == 'waiting_list' %}status-pending
+                        {% else %}status-pending{% endif %}">
+                        {% if app.status == 'new' %}Новая
+                        {% elif app.status == 'on_review' %}На рассмотрении
+                        {% elif app.status == 'approved' %}Одобрена
+                        {% elif app.status == 'rejected' %}Отклонена
+                        {% else %}Лист ожидания{% endif %}
+                    </span>
+                </td>
+                <td>{{ app.created_at }}</td>
+                <td>
+                    {% if app.status in ['new', 'on_review'] %}
+                    <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                        <a href="/applications/{{ app.id }}/approve" class="btn btn-sm btn-success" onclick="return confirm('Одобрить заявку?')">✅ Одобрить</a>
+                        <a href="/applications/{{ app.id }}/reject" class="btn btn-sm btn-danger" onclick="return confirm('Отклонить заявку?')">❌ Отклонить</a>
+                        {% if app.group_is_full %}
+                        <a href="/applications/{{ app.id }}/waiting" class="btn btn-sm btn-warning">📋 В лист ожидания</a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    <a href="/applications/{{ app.id }}" class="btn btn-sm btn-secondary" style="margin-top: 5px;">👁️ Детали</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if not applications %}
+    <div class="alert alert-info">Нет заявок для отображения</div>
+    {% endif %}
+</div>
+{% endblock %}

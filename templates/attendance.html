@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Посещаемость{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div class="logo">
+        <h1>🐬 Pool CRM</h1>
+        <p>Система управления бассейном</p>
+    </div>
+    <div class="user-info">
+        <span class="user-name">{{ user.name }}</span>
+        <span class="user-role">
+            {% if user.role == 'admin' %}Администратор
+            {% elif user.role == 'coach' %}Тренер
+            {% else %}Родитель{% endif %}
+        </span>
+        <a href="/logout" class="logout-btn">Выйти</a>
+    </div>
+</div>
+
+<div class="nav-menu">
+    <a href="/dashboard" class="nav-link">📊 Дашборд</a>
+    {% if user.role == 'parent' %}
+    <a href="/children" class="nav-link">👶 Мои дети</a>
+    <a href="/profile" class="nav-link">⚙️ Настройки</a>
+    {% endif %}
+    {% if user.role == 'coach' %}
+    <a href="/groups" class="nav-link">👥 Мои группы</a>
+    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
+    <a href="/attendance" class="nav-link active">📊 Посещаемость</a>
+    <a href="/transfers" class="nav-link">🔄 Переводы</a>
+    {% endif %}
+    {% if user.role == 'admin' %}
+    <a href="/children" class="nav-link">👶 Дети</a>
+    <a href="/groups" class="nav-link">👥 Группы</a>
+    <a href="/trainers" class="nav-link">🏊‍♂️ Тренеры</a>
+    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
+    <a href="/attendance" class="nav-link active">📊 Посещаемость</a>
+    <a href="/applications" class="nav-link">📋 Заявки</a>
+    <a href="/transfers" class="nav-link">🔄 Переводы</a>
+    {% endif %}
+</div>
+
+<div class="content">
+    <h2>Посещаемость</h2>
+
+    {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <div class="filters-bar">
+        <div class="filter-group">
+            <label>Тренировка</label>
+            <select name="training_id" onchange="this.form.submit()" form="attendanceForm">
+                <option value="">Выберите тренировку</option>
+                {% for training in trainings %}
+                <option value="{{ training.id }}" {% if selected_training_id == training.id %}selected{% endif %}>
+                    {{ training.date }} - {{ training.group_name }} ({{ training.start_time }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <form id="attendanceForm" method="GET" style="display: none;"></form>
+
+    {% if attendance_list %}
+    <form method="POST" action="/attendance/save">
+        <input type="hidden" name="training_id" value="{{ selected_training_id }}">
+
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Ребёнок</th>
+                    <th>Статус</th>
+                    {% if user.role == 'coach' or user.role == 'admin' %}
+                    <th>Отметка</th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in attendance_list %}
+                <tr>
+                    <td>{{ item.child_name }}</td>
+                    <td>
+                        {% if user.role == 'parent' %}
+                            {% if item.status == 'present' %}✅ Присутствовал
+                            {% elif item.status == 'absent_sick' %}❌ Болезнь
+                            {% elif item.status == 'absent_family' %}📌 Семейные обстоятельства
+                            {% elif item.status == 'absent_no_reason' %}⚠️ Без причины
+                            {% else %}⏳ Не отмечено{% endif %}
+                        {% else %}
+                            <span class="status-badge 
+                                {% if item.status == 'present' %}status-present
+                                {% elif item.status == 'absent_sick' or item.status == 'absent_family' or item.status == 'absent_no_reason' %}status-absent
+                                {% else %}status-pending{% endif %}">
+                                {% if item.status == 'present' %}Присутствовал
+                                {% elif item.status == 'absent_sick' %}Болезнь
+                                {% elif item.status == 'absent_family' %}Семейные обстоятельства
+                                {% elif item.status == 'absent_no_reason' %}Без причины
+                                {% else %}Не отмечено{% endif %}
+                            </span>
+                        {% endif %}
+                    </td>
+                    {% if user.role == 'coach' or user.role == 'admin' %}
+                    <td>
+                        <select name="status_{{ item.child_id }}">
+                            <option value="present" {% if item.status == 'present' %}selected{% endif %}>✅ Присутствовал</option>
+                            <option value="absent_sick" {% if item.status == 'absent_sick' %}selected{% endif %}>❌ Болезнь</option>
+                            <option value="absent_family" {% if item.status == 'absent_family' %}selected{% endif %}>📌 Семейные обстоятельства</option>
+                            <option value="absent_no_reason" {% if item.status == 'absent_no_reason' %}selected{% endif %}>⚠️ Без причины</option>
+                        </select>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% if user.role == 'coach' or user.role == 'admin' %}
+        <div style="margin-top: 20px;">
+            <button type="submit" class="btn btn-primary">Сохранить посещаемость</button>
+        </div>
+        {% endif %}
+    </form>
+    {% elif selected_training_id %}
+    <div class="alert alert-info">Нет данных о посещаемости для этой тренировки</div>
+    {% endif %}
+</div>
+{% endblock %}

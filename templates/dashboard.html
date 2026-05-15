@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Дашборд{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div class="logo">
+        <h1>🐬 Pool CRM</h1>
+        <p>Система управления бассейном</p>
+    </div>
+    <div class="user-info">
+        <span class="user-name">{{ user.name }}</span>
+        <span class="user-role">
+            {% if user.role == 'admin' %}Администратор
+            {% elif user.role == 'coach' %}Тренер
+            {% else %}Родитель{% endif %}
+        </span>
+        <a href="/logout" class="logout-btn">Выйти</a>
+    </div>
+</div>
+
+<div class="nav-menu">
+    <a href="/dashboard" class="nav-link active">📊 Дашборд</a>
+    {% if user.role == 'parent' %}
+    <a href="/children" class="nav-link">👶 Мои дети</a>
+    <a href="/profile" class="nav-link">⚙️ Настройки</a>
+    {% endif %}
+    {% if user.role == 'coach' %}
+    <a href="/groups" class="nav-link">👥 Мои группы</a>
+    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
+    <a href="/attendance" class="nav-link">📊 Посещаемость</a>
+    <a href="/transfers" class="nav-link">🔄 Переводы</a>
+    {% endif %}
+    {% if user.role == 'admin' %}
+    <a href="/children" class="nav-link">👶 Дети</a>
+    <a href="/groups" class="nav-link">👥 Группы</a>
+    <a href="/trainers" class="nav-link">🏊‍♂️ Тренеры</a>
+    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
+    <a href="/attendance" class="nav-link">📊 Посещаемость</a>
+    <a href="/applications" class="nav-link">📋 Заявки</a>
+    <a href="/transfers" class="nav-link">🔄 Переводы</a>
+    {% endif %}
+</div>
+
+<div class="content">
+    <h2>Дашборд</h2>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.children }}</div>
+            <div class="stat-label">Детей</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.groups }}</div>
+            <div class="stat-label">Групп</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.coaches }}</div>
+            <div class="stat-label">Тренеров</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.trainings_this_month }}</div>
+            <div class="stat-label">Тренировок в месяце</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.attendance_rate }}%</div>
+            <div class="stat-label">Посещаемость</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.pending_applications }}</div>
+            <div class="stat-label">Заявок на рассмотрении</div>
+        </div>
+    </div>
+
+    {% if user.role == 'parent' and user.children %}
+    <h3>Мои дети</h3>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Имя</th>
+                <th>Дата рождения</th>
+                <th>Класс</th>
+                <th>Группа</th>
+                <th>Статус</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for child in user.children %}
+            <tr>
+                <td>{{ child.name }}</td>
+                <td>{{ child.birthdate }}</td>
+                <td>{{ child.class_num or '-' }}</td>
+                <td>{{ child.group_name or 'Не назначен' }}</td>
+                <td>
+                    <span class="status-badge {% if child.is_active %}status-active{% else %}status-completed{% endif %}">
+                        {% if child.is_active %}Активен{% else %}Неактивен{% endif %}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endblock %}

@@ -730,8 +730,9 @@ def get_applications(db: Session = Depends(get_db)):
     result = []
     for app in applications:
         child_name = None
-        if app.child:
-            child_name = app.child.name
+        if app.child_id:
+            child = db.query(ChildDB).filter(ChildDB.id == app.child_id).first()
+            child_name = child.name
         elif app.public_child_name:
             child_name = app.public_child_name
 

@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Подача заявки{% endblock %}
+
+{% block content %}
+<div class="auth-container" style="max-width: 700px;">
+    <h2 class="auth-title">🐬 Заявка на зачисление</h2>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/register">
+        <h3 style="margin-bottom: 20px; color: #667eea;">📋 О себе</h3>
+
+        <div class="form-group">
+            <label class="required">ФИО родителя</label>
+            <input type="text" name="parent_name" required value="{{ form_data.parent_name|default('') }}">
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="required">Телефон</label>
+                <input type="tel" name="parent_phone" required value="{{ form_data.parent_phone|default('') }}">
+            </div>
+            <div class="form-group">
+                <label class="required">Email</label>
+                <input type="email" name="parent_email" required value="{{ form_data.parent_email|default('') }}">
+            </div>
+        </div>
+
+        <h3 style="margin: 30px 0 20px; color: #667eea;">👶 О ребёнке</h3>
+
+        <div class="form-group">
+            <label class="required">ФИО ребёнка</label>
+            <input type="text" name="child_name" required value="{{ form_data.child_name|default('') }}">
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="required">Дата рождения</label>
+                <input type="date" name="child_birthdate" required value="{{ form_data.child_birthdate|default('') }}">
+            </div>
+            <div class="form-group">
+                <label class="required">Класс</label>
+                <input type="number" name="child_class" min="0" max="11" required value="{{ form_data.child_class|default('') }}">
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="required">Год обучения (уровень подготовки)</label>
+                <select name="child_study_year" required>
+                    <option value="">Выберите уровень</option>
+                    <option value="1" {% if form_data.child_study_year == '1' %}selected{% endif %}>1 год (Начинающий)</option>
+                    <option value="2" {% if form_data.child_study_year == '2' %}selected{% endif %}>2 года (Продолжающий)</option>
+                    <option value="3" {% if form_data.child_study_year == '3' %}selected{% endif %}>3 года (Продвинутый)</option>
+                    <option value="4" {% if form_data.child_study_year == '4' %}selected{% endif %}>4+ лет (Спортивный)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <div class="checkbox-group">
+                <input type="checkbox" name="has_medical_cert" id="has_medical_cert" {% if form_data.has_medical_cert %}checked{% endif %}>
+                <label for="has_medical_cert">Наличие медицинской справки</label>
+            </div>
+        </div>
+
+        <div class="form-group" id="medical_date_group" style="display: {% if form_data.has_medical_cert %}block{% else %}none{% endif %};">
+            <label>Дата выдачи справки</label>
+            <input type="date" name="medical_cert_date" value="{{ form_data.medical_cert_date|default('') }}">
+        </div>
+
+        <div class="form-group">
+            <label>Медицинские противопоказания (если есть)</label>
+            <textarea name="medical_note" rows="2" placeholder="Укажите противопоказания, если они есть">{{ form_data.medical_note|default('') }}</textarea>
+        </div>
+
+        <h3 style="margin: 30px 0 20px; color: #667eea;">🏊 Желаемая группа</h3>
+
+        <div class="form-group">
+            <label class="required">Выберите группу</label>
+            <select name="group_id" required onchange="this.form.submit()">
+                <option value="">-- Выберите группу --</option>
+                {% for group in groups %}
+                <option value="{{ group.id }}" 
+                    data-min-age="{{ group.min_age }}" 
+                    data-max-age="{{ group.max_age }}"
+                    data-level="{{ group.level }}"
+                    {% if selected_group_id == group.id %}selected{% endif %}>
+                    {{ group.name }} ({{ group.age_range }} лет, ур. {{ group.level }}) - {{ group.current_enrollment }}/{{ group.max_capacity }} мест
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {% if age_warning %}
+        <div class="alert alert-warning">
+            ⚠️ {{ age_warning }}
+        </div>
+        {% endif %}
+
+        {% if capacity_warning %}
+        <div class="alert alert-warning">
+            ⚠️ {{ capacity_warning }}
+        </div>
+        {% endif %}
+
+        <button type="submit" class="btn btn-primary" style="width: 100%;">Отправить заявку</button>
+    </form>
+
+    <div class="auth-links">
+        <p>Уже есть аккаунт? <a href="/login">Войти</a></p>
+    </div>
+</div>
+
+<script>
+    document.getElementById('has_medical_cert').addEventListener('change', function() {
+        document.getElementById('medical_date_group').style.display = this.checked ? 'block' : 'none';
+    });
+</script>
+{% endblock %}

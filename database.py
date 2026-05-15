@@ -75,6 +75,8 @@ class ParentDB(Base):
 
 
 # ========== ТАБЛИЦА ДЕТЕЙ ==========
+# database.py - в классе ChildDB добавьте:
+
 class ChildDB(Base):
     __tablename__ = "children"
 
@@ -93,6 +95,7 @@ class ChildDB(Base):
     attendances = relationship("AttendanceDB", back_populates="child")
     transfer_history = relationship("TransferHistoryDB", back_populates="child")
     transfer_requests = relationship("TransferRequestDB", back_populates="child")
+    applications = relationship("ApplicationDB", back_populates="child")  # <-- ДОБАВИТЬ
 
 # ========== ТАБЛИЦА ТРЕНЕРОВ ==========
 class CoachDB(Base):
@@ -195,12 +198,14 @@ class AttendanceDB(Base):
     child = relationship("ChildDB", back_populates="attendances")
 
 # ========== ТАБЛИЦА ЗАЯВОК ==========
+# database.py - найдите класс ApplicationDB и добавьте relationship
+
 class ApplicationDB(Base):
     __tablename__ = "applications"
 
     id = Column(Integer, primary_key=True, index=True)
     parent_id = Column(Integer, ForeignKey("parents.id"), nullable=True)
-    child_id = Column(Integer, ForeignKey("children.id"), nullable=True)
+    child_id = Column(Integer, ForeignKey("children.id"), nullable=True)  # Убедитесь, что эта строка есть
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
     status = Column(SQLEnum(ApplicationStatus), default=ApplicationStatus.NEW)
     admin_comment = Column(String)
@@ -216,7 +221,9 @@ class ApplicationDB(Base):
     public_child_medical_note = Column(String)
     public_child_medical_date = Column(Date)
 
+    # СВЯЗИ - ДОБАВЬТЕ ЭТИ СТРОКИ:
     parent = relationship("ParentDB", back_populates="applications")
+    child = relationship("ChildDB", back_populates="applications")  # <-- ДОБАВИТЬ
     group = relationship("GroupDB", back_populates="applications")
 
 # ========== ТАБЛИЦА ИСТОРИИ ПЕРЕВОДОВ ==========

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Добро пожаловать{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <h2 class="auth-title">🐬 Pool CRM</h2>
+    <p style="text-align: center; margin-bottom: 30px; color: #666;">
+        Система управления бассейном
+    </p>
+
+    <div style="display: flex; gap: 15px; justify-content: center;">
+        <a href="/login" class="btn btn-primary">Войти</a>
+        <a href="/register" class="btn btn-success">Подать заявку</a>
+    </div>
+
+    <div class="auth-links">
+        <p>Нет аккаунта? <a href="/register">Подайте заявку на зачисление</a></p>
+    </div>
+</div>
+{% endblock %}

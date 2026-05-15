@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Дети{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div class="logo">
+        <h1>🐬 Pool CRM</h1>
+        <p>Система управления бассейном</p>
+    </div>
+    <div class="user-info">
+        <span class="user-name">{{ user.name }}</span>
+        <span class="user-role">
+            {% if user.role == 'admin' %}Администратор
+            {% elif user.role == 'coach' %}Тренер
+            {% else %}Родитель{% endif %}
+        </span>
+        <a href="/logout" class="logout-btn">Выйти</a>
+    </div>
+</div>
+
+<div class="nav-menu">
+    <a href="/dashboard" class="nav-link">📊 Дашборд</a>
+    {% if user.role == 'parent' %}
+    <a href="/children" class="nav-link active">👶 Мои дети</a>
+    <a href="/profile" class="nav-link">⚙️ Настройки</a>
+    {% endif %}
+    {% if user.role == 'coach' %}
+    <a href="/groups" class="nav-link">👥 Мои группы</a>
+    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
+    <a href="/attendance" class="nav-link">📊 Посещаемость</a>
+    <a href="/transfers" class="nav-link">🔄 Переводы</a>
+    {% endif %}
+    {% if user.role == 'admin' %}
+    <a href="/children" class="nav-link active">👶 Дети</a>
+    <a href="/groups" class="nav-link">👥 Группы</a>
+    <a href="/trainers" class="nav-link">🏊‍♂️ Тренеры</a>
+    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
+    <a href="/attendance" class="nav-link">📊 Посещаемость</a>
+    <a href="/applications" class="nav-link">📋 Заявки</a>
+    <a href="/transfers" class="nav-link">🔄 Переводы</a>
+    {% endif %}
+</div>
+
+<div class="content">
+    <div class="action-bar">
+        <h2>{% if user.role == 'parent' %}Мои дети{% else %}Управление детьми{% endif %}</h2>
+        {% if user.role == 'parent' %}
+        <a href="/children/add" class="btn btn-primary">+ Добавить ребёнка</a>
+        {% endif %}
+    </div>
+
+    {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Имя</th>
+                <th>Дата рождения</th>
+                <th>Класс</th>
+                <th>Год обучения</th>
+                <th>Группа</th>
+                <th>Статус</th>
+                {% if user.role == 'admin' or user.role == 'parent' %}
+                <th>Действия</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for child in children %}
+            <tr>
+                <td>{{ child.id }}</td>
+                <td>{{ child.name }}</td>
+                <td>{{ child.birthdate }}</td>
+                <td>{{ child.class_num or '-' }}</td>
+                <td>{{ child.study_year or '-' }}</td>
+                <td>{{ child.group_name or 'Не назначен' }}</td>
+                <td>
+                    <span class="status-badge {% if child.is_active %}status-active{% else %}status-completed{% endif %}">
+                        {% if child.is_active %}Активен{% else %}Неактивен{% endif %}
+                    </span>
+                </td>
+                {% if user.role == 'admin' or user.role == 'parent' %}
+                <td>
+                    {% if user.role == 'parent' %}
+                    <a href="/children/{{ child.id }}/edit" class="btn btn-sm btn-primary">✏️</a>
+                    {% endif %}
+                    {% if user.role == 'admin' %}
+                    <a href="/children/{{ child.id }}/delete" class="btn btn-sm btn-danger" onclick="return confirm('Удалить ребёнка?')">🗑️</a>
+                    {% endif %}
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

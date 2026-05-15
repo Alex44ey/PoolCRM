@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Мой профиль{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div class="logo">
+        <h1>🐬 Pool CRM</h1>
+        <p>Система управления бассейном</p>
+    </div>
+    <div class="user-info">
+        <span class="user-name">{{ user.name }}</span>
+        <span class="user-role">Родитель</span>
+        <a href="/logout" class="logout-btn">Выйти</a>
+    </div>
+</div>
+
+<div class="nav-menu">
+    <a href="/dashboard" class="nav-link">📊 Дашборд</a>
+    <a href="/children" class="nav-link">👶 Мои дети</a>
+    <a href="/profile" class="nav-link active">⚙️ Настройки</a>
+</div>
+
+<div class="content">
+    <h2>Мой профиль</h2>
+
+    {% if success %}
+    <div class="alert alert-success">{{ success }}</div>
+    {% endif %}
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/profile">
+        <div class="form-group">
+            <label class="required">ФИО</label>
+            <input type="text" name="name" required value="{{ parent.name }}">
+        </div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label class="required">Email</label>
+                <input type="email" name="email" required value="{{ parent.email }}">
+            </div>
+            <div class="form-group">
+                <label class="required">Телефон</label>
+                <input type="tel" name="phone" required value="{{ parent.phone|default('') }}">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Новый пароль</label>
+            <input type="password" name="password" placeholder="Оставьте пустым, чтобы не менять">
+        </div>
+
+        <div class="form-group">
+            <label>Подтверждение пароля</label>
+            <input type="password" name="confirm_password" placeholder="Введите пароль ещё раз">
+        </div>
+
+        <hr style="margin: 30px 0;">
+
+        <h3 style="margin-bottom: 20px;">🔗 Настройки VK</h3>
+
+        <div class="form-group">
+            <div class="checkbox-group">
+                <input type="checkbox" name="notify_absences" id="notify_absences" {% if parent.notify_absences %}checked{% endif %}>
+                <label for="notify_absences">Уведомлять о пропусках</label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <div class="checkbox-group">
+                <input type="checkbox" name="notify_reminders" id="notify_reminders" {% if parent.notify_reminders %}checked{% endif %}>
+                <label for="notify_reminders">Уведомлять о напоминаниях</label>
+            </div>
+        </div>
+
+        {% if parent.is_vk_linked %}
+        <div class="alert alert-success">
+            ✅ VK аккаунт привязан (ID: {{ parent.vk_id }})
+        </div>
+        <a href="/profile/unlink-vk" class="btn btn-danger" onclick="return confirm('Отвязать VK аккаунт?')">🔌 Отвязать VK</a>
+        {% else %}
+        <div class="alert alert-info">
+            🔗 VK аккаунт не привязан
+        </div>
+        
+        <div class="form-group">
+            <label>Код для привязки VK</label>
+            <div style="display: flex; gap: 10px; align-items: flex-start;">
+                <input type="text" id="vkCode" value="{{ vk_code }}" readonly style="background: #f0f0f0; font-size: 24px; text-align: center; width: 150px;">
+                <button type="button" class="btn btn-primary" onclick="generateVKCode()">🔄 Сгенерировать код</button>
+            </div>
+            <small>Напишите боту @pool_crm_bot и отправьте команду: привязать {{ vk_code }}</small>
+        </div>
+        {% endif %}
+
+        <div style="display: flex; gap: 15px; margin-top: 30px;">
+            <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+        </div>
+    </form>
+</div>
+
+<script>
+    async function generateVKCode() {
+        try {
+            const response = await fetch('/api/parents/{{ user.id }}/generate-vk-code', {
+                method: 'POST'
+            });
+            const data = await response.json();
+            document.getElementById('vkCode').value = data.code;
+            alert('Новый код сгенерирован! Код действителен 10 минут.');
+        } catch (error) {
+            alert('Ошибка генерации кода');
+        }
+    }
+</script>
+{% endblock %}

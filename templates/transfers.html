@@ -44,7 +44,7 @@
 
 <div class="content">
     <div class="action-bar">
-        <h2>Запросы на перевод</h2>
+        <h2>Запросы на перевод и зачисление</h2>
         {% if user.role == 'coach' %}
         <a href="/transfers/add" class="btn btn-primary">+ Создать запрос</a>
         {% endif %}
@@ -73,27 +73,51 @@
             <tr>
                 <td>{{ transfer.id }}</td>
                 <td>{{ transfer.child_name }}</td>
-                <td>{{ transfer.from_group_name }}</td>
-                <td>{{ transfer.suggested_group_name or 'Не указана' }}</td>
-                <td>{{ transfer.coach_name }}</td>
-                <td>{{ transfer.comment|truncate(50) }}</td>
                 <td>
-                    <span class="status-badge 
+                    {% if transfer.from_group_name %}
+                        {{ transfer.from_group_name }}
+                    {% else %}
+                        <span style="color: #27ae60; font-weight: bold;">🆕 Новое зачисление</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if transfer.suggested_group_name %}
+                        {{ transfer.suggested_group_name }}
+                    {% else %}
+                        <span style="color: #e67e22;">На усмотрение админа</span>
+                    {% endif %}
+                </td>
+                <td>{{ transfer.coach_name }}</td>
+                <td class="px-4 py-3">
+                    {% if transfer.comment %}
+                        {{ transfer.comment|truncate(50) if transfer.comment|length > 50 else transfer.comment }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="status-badge
                         {% if transfer.status == 'approved' %}status-approved
                         {% elif transfer.status == 'rejected' %}status-rejected
                         {% else %}status-pending{% endif %}">
-                        {% if transfer.status == 'pending' %}На рассмотрении
-                        {% elif transfer.status == 'approved' %}Одобрен
-                        {% else %}Отклонён{% endif %}
+                        {% if transfer.status == 'pending' %}⏳ На рассмотрении
+                        {% elif transfer.status == 'approved' %}✅ Одобрен
+                        {% else %}❌ Отклонён{% endif %}
                     </span>
                 </td>
                 <td>{{ transfer.created_at }}</td>
                 <td>
                     {% if transfer.status == 'pending' and user.role == 'admin' %}
                     <div style="display: flex; gap: 5px;">
-                        <a href="/transfers/{{ transfer.id }}/approve" class="btn btn-sm btn-success" onclick="return confirm('Одобрить перевод?')">✅</a>
-                        <a href="/transfers/{{ transfer.id }}/reject" class="btn btn-sm btn-danger" onclick="return confirm('Отклонить перевод?')">❌</a>
+                        <a href="/transfers/{{ transfer.id }}/approve" class="btn btn-sm btn-success" onclick="return confirm('Одобрить перевод?')" title="Одобрить">✅</a>
+                        <a href="/transfers/{{ transfer.id }}/reject" class="btn btn-sm btn-danger" onclick="return confirm('Отклонить перевод?')" title="Отклонить">❌</a>
                     </div>
+                    {% elif transfer.status == 'pending' %}
+                        <span style="color: #f39c12;">⏳ Ожидает</span>
+                    {% elif transfer.status == 'approved' %}
+                        <span style="color: #27ae60;">✓ Выполнен</span>
+                    {% else %}
+                        <span style="color: #e74c3c;">✗ Отклонён</span>
                     {% endif %}
                 </td>
             </tr>
@@ -102,7 +126,44 @@
     </table>
 
     {% if not transfers %}
-    <div class="alert alert-info">Нет запросов на перевод</div>
+    <div class="alert alert-info">
+        Нет запросов на перевод
+        {% if user.role == 'coach' %}
+        <br><a href="/transfers/add" class="btn btn-sm btn-primary" style="margin-top: 10px;">Создать первый запрос</a>
+        {% endif %}
+    </div>
     {% endif %}
 </div>
+
+<style>
+    .status-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    .status-pending {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    .status-approved {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    .status-rejected {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    .btn-sm {
+        padding: 4px 8px;
+        font-size: 14px;
+    }
+    .action-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+</style>
 {% endblock %}

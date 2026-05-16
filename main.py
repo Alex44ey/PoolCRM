@@ -23,23 +23,25 @@ from database import (
     UserRole, EnrollmentStatus, TrainingStatus, AttendanceStatus,
     ApplicationStatus
 )
-
-from vk_bot import VK_ENABLED
+from vk_bot import VK_ENABLED, start_vk_worker, get_bot_status
 
 # ========== НАСТРОЙКА ==========
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("🚀 Запуск приложения...")
+
+    # Создаём таблицы
     Base.metadata.create_all(bind=engine)
 
+    # Запускаем VK бота
     try:
-        from vk_bot import start_vk_worker
-        thread = Thread(target=start_vk_worker, daemon=True)
-        thread.start()
+        start_vk_worker(None)
         print("🤖 VK бот запущен")
     except Exception as e:
         print(f"⚠️ Ошибка запуска VK бота: {e}")
-    
+        import traceback
+        traceback.print_exc()
+
     print("✅ Приложение готово!")
     yield
 
@@ -140,6 +142,12 @@ def calculate_age(birthdate: date) -> float:
         age -= 1
     return age
 
+def get_group_enrollment_count(group_id: int, db: Session) -> int:
+    """Получение актуального количества детей в группе"""
+    return db.query(EnrollmentDB).filter(
+        EnrollmentDB.group_id == group_id,
+        EnrollmentDB.status == EnrollmentStatus.ACTIVE
+    ).count()
 
 # ========== АУТЕНТИФИКАЦИЯ ==========
 @app.get("/", response_class=HTMLResponse)
@@ -441,15 +449,31 @@ async def add_child_page(request: Request, db: Session = Depends(get_db)):
     if not user or user["role"] != "parent":
         return RedirectResponse(url="/dashboard")
 
+    # Получаем список групп для выбора
+    groups = db.query(GroupDB).filter(GroupDB.is_active == True).all()
+    groups_data = []
+    for group in groups:
+        current_count = db.query(EnrollmentDB).filter(
+            EnrollmentDB.group_id == group.id,
+            EnrollmentDB.status == EnrollmentStatus.ACTIVE
+        ).count()
+        groups_data.append({
+            "id": group.id,
+            "name": group.name,
+            "current_enrollment": current_count,
+            "max_capacity": group.max_capacity
+        })
+
     return templates.TemplateResponse(
-        name = "child_form.html", 
-        request = request,
-        context = {
-        "request": request,
-        "user": user,
-        "title": "Добавить ребёнка",
-        "child": {}
-    })
+        name="child_form.html",
+        request=request,
+        context={
+            "request": request,
+            "user": user,
+            "title": "Добавить ребёнка",
+            "child": {},
+            "groups": groups_data  # Добавляем группы
+        })
 
 
 @app.post("/children/add")
@@ -460,13 +484,15 @@ async def add_child(
         class_num: Optional[int] = Form(None),
         study_year: Optional[int] = Form(None),
         medical_note: Optional[str] = Form(None),
+        group_id: Optional[int] = Form(None),  # ДОБАВЬТЕ ЭТОТ ПАРАМЕТР
         db: Session = Depends(get_db)
 ):
-    """Добавление ребёнка"""
+    """Добавление ребёнка с возможностью сразу зачислить в группу"""
     user = get_current_user(request, db)
     if not user or user["role"] != "parent":
         return RedirectResponse(url="/dashboard")
 
+    # Создаём ребёнка
     child = ChildDB(
         name=name,
         birthdate=datetime.strptime(birthdate, "%Y-%m-%d").date(),
@@ -476,8 +502,37 @@ async def add_child(
         parent_id=user["id"]
     )
     db.add(child)
-    db.commit()
+    db.flush()  # Получаем ID ребёнка
 
+    # Если указана группа - зачисляем
+    if group_id:
+        group = db.query(GroupDB).filter(GroupDB.id == group_id, GroupDB.is_active == True).first()
+        if group:
+            # Проверяем, не заполнена ли группа
+            current_count = db.query(EnrollmentDB).filter(
+                EnrollmentDB.group_id == group_id,
+                EnrollmentDB.status == EnrollmentStatus.ACTIVE
+            ).count()
+
+            if current_count < group.max_capacity:
+                enrollment = EnrollmentDB(
+                    child_id=child.id,
+                    group_id=group_id,
+                    status=EnrollmentStatus.ACTIVE,
+                    start_date=date.today()
+                )
+                db.add(enrollment)
+            else:
+                # Если группа полная, добавляем в лист ожидания
+                enrollment = EnrollmentDB(
+                    child_id=child.id,
+                    group_id=group_id,
+                    status=EnrollmentStatus.WAITING_LIST,
+                    start_date=date.today()
+                )
+                db.add(enrollment)
+
+    db.commit()
     return RedirectResponse(url="/children", status_code=303)
 
 
@@ -536,18 +591,107 @@ async def edit_child(
 
 @app.get("/children/{child_id}/delete")
 async def delete_child(request: Request, child_id: int, db: Session = Depends(get_db)):
-    """Удаление ребёнка (админ)"""
+    """Удаление ребёнка (деактивация)"""
     user = get_current_user(request, db)
     if not user or user["role"] != "admin":
         return RedirectResponse(url="/dashboard")
 
     child = db.query(ChildDB).filter(ChildDB.id == child_id).first()
     if child:
+        # Деактивируем ребёнка
         child.is_active = False
+
+        # Деактивируем все активные зачисления
+        enrollments = db.query(EnrollmentDB).filter(
+            EnrollmentDB.child_id == child_id,
+            EnrollmentDB.status == EnrollmentStatus.ACTIVE
+        ).all()
+
+        for enrollment in enrollments:
+            enrollment.status = EnrollmentStatus.COMPLETED
+            enrollment.end_date = date.today()
+
         db.commit()
 
     return RedirectResponse(url="/children", status_code=303)
 
+
+@app.post("/children/{child_id}/enroll")
+async def enroll_child_to_group(
+        request: Request,
+        child_id: int,
+        group_id: int = Form(...),
+        db: Session = Depends(get_db)
+):
+    """Зачисление ребёнка в группу (админ/тренер)"""
+    user = get_current_user(request, db)
+    if not user or user["role"] not in ["admin", "coach"]:
+        return RedirectResponse(url="/dashboard")
+
+    child = db.query(ChildDB).filter(ChildDB.id == child_id, ChildDB.is_active == True).first()
+    if not child:
+        return RedirectResponse(url="/children", status_code=303)
+
+    group = db.query(GroupDB).filter(GroupDB.id == group_id, GroupDB.is_active == True).first()
+    if not group:
+        return RedirectResponse(url="/children", status_code=303)
+
+    # Проверяем, не зачислен ли уже
+    existing = db.query(EnrollmentDB).filter(
+        EnrollmentDB.child_id == child_id,
+        EnrollmentDB.group_id == group_id,
+        EnrollmentDB.status == EnrollmentStatus.ACTIVE
+    ).first()
+
+    if existing:
+        return RedirectResponse(url=f"/children/{child_id}", status_code=303)
+
+    # Проверяем свободные места
+    current_count = db.query(EnrollmentDB).filter(
+        EnrollmentDB.group_id == group_id,
+        EnrollmentDB.status == EnrollmentStatus.ACTIVE
+    ).count()
+
+    if current_count >= group.max_capacity:
+        # Группа полная
+        return RedirectResponse(url=f"/children/{child_id}?error=group_full", status_code=303)
+
+    enrollment = EnrollmentDB(
+        child_id=child_id,
+        group_id=group_id,
+        status=EnrollmentStatus.ACTIVE,
+        start_date=date.today()
+    )
+    db.add(enrollment)
+    db.commit()
+
+    return RedirectResponse(url=f"/children/{child_id}", status_code=303)
+
+
+@app.post("/children/{child_id}/disenroll")
+async def disenroll_child_from_group(
+        request: Request,
+        child_id: int,
+        enrollment_id: int = Form(...),
+        db: Session = Depends(get_db)
+):
+    """Отчисление ребёнка из группы"""
+    user = get_current_user(request, db)
+    if not user or user["role"] not in ["admin", "coach"]:
+        return RedirectResponse(url="/dashboard")
+
+    enrollment = db.query(EnrollmentDB).filter(
+        EnrollmentDB.id == enrollment_id,
+        EnrollmentDB.child_id == child_id,
+        EnrollmentDB.status == EnrollmentStatus.ACTIVE
+    ).first()
+
+    if enrollment:
+        enrollment.status = EnrollmentStatus.COMPLETED
+        enrollment.end_date = date.today()
+        db.commit()
+
+    return RedirectResponse(url=f"/children/{child_id}", status_code=303)
 
 # ========== ГРУППЫ ==========
 @app.get("/groups", response_class=HTMLResponse)
@@ -566,6 +710,7 @@ async def groups_list(request: Request, db: Session = Depends(get_db)):
 
     groups_data = []
     for group in groups:
+        # ВСЕГДА получаем актуальное количество
         current_count = db.query(EnrollmentDB).filter(
             EnrollmentDB.group_id == group.id,
             EnrollmentDB.status == EnrollmentStatus.ACTIVE
@@ -577,18 +722,18 @@ async def groups_list(request: Request, db: Session = Depends(get_db)):
             "level": group.level,
             "coach_name": group.coach.name if group.coach else None,
             "max_capacity": group.max_capacity,
-            "current_enrollment": current_count,
+            "current_enrollment": current_count,  # Актуальное значение
             "age_range": "6-16"
         })
 
     return templates.TemplateResponse(
-        name = "groups.html", 
-        request = request,
-        context = {
-        "request": request,
-        "user": user,
-        "groups": groups_data
-    })
+        name="groups.html",
+        request=request,
+        context={
+            "request": request,
+            "user": user,
+            "groups": groups_data
+        })
 
 
 @app.get("/groups/add", response_class=HTMLResponse)
@@ -1334,18 +1479,18 @@ async def transfers_list(request: Request, db: Session = Depends(get_db)):
         transfers_data.append({
             "id": transfer.id,
             "child_name": transfer.child.name if transfer.child else "Unknown",
-            "from_group_name": transfer.from_group.name if transfer.from_group else "Unknown",
+            "from_group_name": transfer.from_group.name if transfer.from_group else None,  # None для новых зачислений
             "suggested_group_name": transfer.suggested_group.name if transfer.suggested_group else None,
             "coach_name": transfer.coach.name if transfer.coach else "Unknown",
-            "comment": transfer.comment,
+            "comment": transfer.comment or "",  # Заменяем None на пустую строку
             "status": transfer.status,
             "created_at": transfer.created_at
         })
 
     return templates.TemplateResponse(
-        name = "transfers.html", 
-        request = request,
-        context = {
+        name="transfers.html",
+        request=request,
+        context={
             "request": request,
             "user": user,
             "transfers": transfers_data
@@ -1354,43 +1499,115 @@ async def transfers_list(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/transfers/add", response_class=HTMLResponse)
 async def add_transfer_page(request: Request, db: Session = Depends(get_db)):
-    """Страница создания запроса на перевод (тренер)"""
+    """Страница создания запроса на перевод/зачисление (тренер)"""
     user = get_current_user(request, db)
     if not user or user["role"] != "coach":
         return RedirectResponse(url="/dashboard")
 
-    # Дети в группах тренера
-    coach_groups = db.query(GroupDB.id).filter(GroupDB.coach_id == user["id"], GroupDB.is_active == True).all()
+    # Получаем ID групп тренера
+    coach_groups = db.query(GroupDB.id).filter(
+        GroupDB.coach_id == user["id"],
+        GroupDB.is_active == True
+    ).all()
     group_ids = [g[0] for g in coach_groups]
 
-    children = db.query(ChildDB).join(EnrollmentDB).filter(
-        EnrollmentDB.group_id.in_(group_ids),
-        EnrollmentDB.status == EnrollmentStatus.ACTIVE,
-        ChildDB.is_active == True
+    # ========== 1. ДЕТИ В ГРУППАХ ТРЕНЕРА ==========
+    children_in_groups = []
+    if group_ids:
+        children_query = db.query(ChildDB).join(
+            EnrollmentDB, EnrollmentDB.child_id == ChildDB.id
+        ).filter(
+            EnrollmentDB.group_id.in_(group_ids),
+            EnrollmentDB.status.in_([EnrollmentStatus.ACTIVE, EnrollmentStatus.WAITING_LIST]),
+            ChildDB.is_active == True
+        ).distinct()
+
+        for child in children_query.all():
+            enrollments = db.query(EnrollmentDB).filter(
+                EnrollmentDB.child_id == child.id,
+                EnrollmentDB.group_id.in_(group_ids),
+                EnrollmentDB.status.in_([EnrollmentStatus.ACTIVE, EnrollmentStatus.WAITING_LIST])
+            ).all()
+
+            for enrollment in enrollments:
+                children_in_groups.append({
+                    "id": child.id,
+                    "name": child.name,
+                    "group_id": enrollment.group_id,
+                    "group_name": enrollment.group.name if enrollment.group else "Unknown",
+                    "status": enrollment.status.value,
+                    "type": "in_group"
+                })
+
+    # ========== 2. ДЕТИ БЕЗ ГРУППЫ (НОВЫЕ) ==========
+    # Находим детей, у которых нет активных зачислений
+    children_without_group = db.query(ChildDB).filter(
+        ChildDB.is_active == True,
+        ~ChildDB.enrollments.any(
+            EnrollmentDB.status.in_([EnrollmentStatus.ACTIVE, EnrollmentStatus.WAITING_LIST])
+        )
     ).all()
 
-    children_data = []
-    for child in children:
-        enrollment = db.query(EnrollmentDB).filter(
-            EnrollmentDB.child_id == child.id,
-            EnrollmentDB.status == EnrollmentStatus.ACTIVE
-        ).first()
-        children_data.append({
+    children_without_group_data = []
+    for child in children_without_group:
+        # Проверяем, что родитель разрешает уведомления (опционально)
+        children_without_group_data.append({
             "id": child.id,
             "name": child.name,
-            "group_name": enrollment.group.name if enrollment else None
+            "group_id": None,
+            "group_name": "Без группы (ожидает зачисления)",
+            "status": "no_group",
+            "type": "without_group",
+            "birthdate": child.birthdate,
+            "class_num": child.class_num,
+            "study_year": child.study_year
         })
 
-    groups = db.query(GroupDB).filter(GroupDB.is_active == True).all()
+    # ========== 3. ДЕТИ В ДРУГИХ ГРУППАХ (для кросс-переводов) ==========
+    # Если нужно видеть детей из других групп (опционально)
+    other_groups_children = []
+    # Можно добавить по желанию
+
+    # Объединяем всех детей
+    all_children = children_in_groups + children_without_group_data
+
+    # Получаем все группы тренера для выбора (куда переводить/зачислять)
+    groups = db.query(GroupDB).filter(
+        GroupDB.is_active == True,
+        GroupDB.coach_id == user["id"]
+    ).all()
+
+    groups_data = []
+    for group in groups:
+        current_count = db.query(EnrollmentDB).filter(
+            EnrollmentDB.group_id == group.id,
+            EnrollmentDB.status == EnrollmentStatus.ACTIVE
+        ).count()
+        groups_data.append({
+            "id": group.id,
+            "name": group.name,
+            "current_enrollment": current_count,
+            "max_capacity": group.max_capacity,
+            "has_free_places": current_count < group.max_capacity
+        })
+
+    # Добавляем информацию о родителях для детей без группы
+    for child in children_without_group_data:
+        child_obj = db.query(ChildDB).filter(ChildDB.id == child["id"]).first()
+        if child_obj and child_obj.parent:
+            child["parent_name"] = child_obj.parent.name
+            child["parent_phone"] = child_obj.parent.phone
 
     return templates.TemplateResponse(
-        name = "transfer_form.html", 
-        request = request,
-        context = {
+        name="transfer_form.html",
+        request=request,
+        context={
             "request": request,
             "user": user,
-            "children": children_data,
-            "groups": groups
+            "children": all_children,
+            "groups": groups_data,
+            "has_children_in_groups": len(children_in_groups) > 0,
+            "has_children_without_group": len(children_without_group_data) > 0
         })
 
 
@@ -1398,21 +1615,37 @@ async def add_transfer_page(request: Request, db: Session = Depends(get_db)):
 async def add_transfer(
         request: Request,
         child_id: int = Form(...),
-        from_group_id: int = Form(...),
+        from_group_id: Optional[int] = Form(None),  # Теперь может быть None
         suggested_group_id: Optional[int] = Form(None),
         comment: Optional[str] = Form(None),
         db: Session = Depends(get_db)
 ):
-    """Создание запроса на перевод (тренер)"""
+    """Создание запроса на перевод/зачисление (тренер)"""
     user = get_current_user(request, db)
     if not user or user["role"] != "coach":
         return RedirectResponse(url="/dashboard")
 
+    child = db.query(ChildDB).filter(ChildDB.id == child_id, ChildDB.is_active == True).first()
+    if not child:
+        return RedirectResponse(url="/transfers/add?error=child_not_found")
+
+    # Если from_group_id не указан, значит ребёнок без группы
+    is_new_child = not from_group_id or from_group_id == 0
+
+    # Проверяем, существует ли уже активный запрос
+    existing = db.query(TransferRequestDB).filter(
+        TransferRequestDB.child_id == child_id,
+        TransferRequestDB.status == "pending"
+    ).first()
+
+    if existing:
+        return RedirectResponse(url="/transfers?error=already_exists")
+
     transfer = TransferRequestDB(
         coach_id=user["id"],
         child_id=child_id,
-        from_group_id=from_group_id,
-        suggested_group_id=suggested_group_id,
+        from_group_id=from_group_id if from_group_id and not is_new_child else None,
+        suggested_group_id=suggested_group_id if suggested_group_id else None,
         comment=comment,
         status="pending"
     )
@@ -1424,16 +1657,59 @@ async def add_transfer(
 
 @app.get("/transfers/{transfer_id}/approve")
 async def approve_transfer(request: Request, transfer_id: int, db: Session = Depends(get_db)):
-    """Одобрение перевода (админ)"""
+    """Одобрение перевода/зачисления (админ)"""
     user = get_current_user(request, db)
     if not user or user["role"] != "admin":
         return RedirectResponse(url="/dashboard")
 
     transfer = db.query(TransferRequestDB).filter(TransferRequestDB.id == transfer_id).first()
-    if transfer:
-        transfer.status = "approved"
+    if not transfer:
+        return RedirectResponse(url="/transfers")
 
-        # Обновляем зачисление
+    transfer.status = "approved"
+
+    # Если ребёнок без группы (from_group_id == None)
+    if not transfer.from_group_id:
+        # Простое зачисление в предложенную группу
+        if transfer.suggested_group_id:
+            # Проверяем свободные места
+            group = db.query(GroupDB).filter(GroupDB.id == transfer.suggested_group_id).first()
+            if group:
+                current_count = db.query(EnrollmentDB).filter(
+                    EnrollmentDB.group_id == group.id,
+                    EnrollmentDB.status == EnrollmentStatus.ACTIVE
+                ).count()
+
+                if current_count < group.max_capacity:
+                    new_enrollment = EnrollmentDB(
+                        child_id=transfer.child_id,
+                        group_id=transfer.suggested_group_id,
+                        status=EnrollmentStatus.ACTIVE,
+                        start_date=date.today()
+                    )
+                    db.add(new_enrollment)
+                else:
+                    # Если мест нет - в лист ожидания
+                    new_enrollment = EnrollmentDB(
+                        child_id=transfer.child_id,
+                        group_id=transfer.suggested_group_id,
+                        status=EnrollmentStatus.WAITING_LIST,
+                        start_date=date.today()
+                    )
+                    db.add(new_enrollment)
+
+        # Создаём запись в истории
+        history = TransferHistoryDB(
+            child_id=transfer.child_id,
+            from_group_id=None,  # Был без группы
+            to_group_id=transfer.suggested_group_id,
+            reason=transfer.comment or "Новое зачисление",
+            created_by=f"admin (request by coach {transfer.coach_id})"
+        )
+        db.add(history)
+
+    else:
+        # Существующий перевод из группы в группу
         enrollment = db.query(EnrollmentDB).filter(
             EnrollmentDB.child_id == transfer.child_id,
             EnrollmentDB.group_id == transfer.from_group_id,
@@ -1441,28 +1717,45 @@ async def approve_transfer(request: Request, transfer_id: int, db: Session = Dep
         ).first()
 
         if enrollment and transfer.suggested_group_id:
+            # Закрываем старое зачисление
             enrollment.status = EnrollmentStatus.COMPLETED
             enrollment.end_date = date.today()
 
-            new_enrollment = EnrollmentDB(
-                child_id=transfer.child_id,
-                group_id=transfer.suggested_group_id,
-                status=EnrollmentStatus.ACTIVE,
-                start_date=date.today()
-            )
-            db.add(new_enrollment)
+            # Проверяем места в новой группе
+            group = db.query(GroupDB).filter(GroupDB.id == transfer.suggested_group_id).first()
+            if group:
+                current_count = db.query(EnrollmentDB).filter(
+                    EnrollmentDB.group_id == group.id,
+                    EnrollmentDB.status == EnrollmentStatus.ACTIVE
+                ).count()
+
+                if current_count < group.max_capacity:
+                    new_enrollment = EnrollmentDB(
+                        child_id=transfer.child_id,
+                        group_id=transfer.suggested_group_id,
+                        status=EnrollmentStatus.ACTIVE,
+                        start_date=date.today()
+                    )
+                    db.add(new_enrollment)
+                else:
+                    new_enrollment = EnrollmentDB(
+                        child_id=transfer.child_id,
+                        group_id=transfer.suggested_group_id,
+                        status=EnrollmentStatus.WAITING_LIST,
+                        start_date=date.today()
+                    )
+                    db.add(new_enrollment)
 
             history = TransferHistoryDB(
                 child_id=transfer.child_id,
                 from_group_id=transfer.from_group_id,
                 to_group_id=transfer.suggested_group_id,
                 reason=transfer.comment,
-                created_by="admin"
+                created_by=f"admin (request by coach {transfer.coach_id})"
             )
             db.add(history)
 
-        db.commit()
-
+    db.commit()
     return RedirectResponse(url="/transfers", status_code=303)
 
 

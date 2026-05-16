@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Создать запрос на перевод{% endblock %}
+{% block title %}Создать запрос на перевод/зачисление{% endblock %}
 
 {% block content %}
 <div class="header">
@@ -24,46 +24,77 @@
 </div>
 
 <div class="content">
-    <h2>Создать запрос на перевод</h2>
+    <h2>Создать запрос на перевод или зачисление</h2>
 
     {% if error %}
     <div class="alert alert-error">{{ error }}</div>
     {% endif %}
 
-    <form method="POST">
+    {% if has_children_without_group %}
+    <div class="alert alert-info" style="background-color: #e3f2fd; border-color: #2196f3;">
+        💡 <strong>Новые дети!</strong> В системе есть дети, ожидающие зачисления в группы.
+        Вы можете создать запрос на их зачисление (для этого не нужно выбирать "Текущую группу").
+    </div>
+    {% endif %}
+
+    <form method="POST" id="transferForm">
         <div class="form-group">
             <label class="required">Ребёнок</label>
-            <select name="child_id" required>
+            <select name="child_id" id="child_id" required>
                 <option value="">-- Выберите ребёнка --</option>
-                {% for child in children %}
-                <option value="{{ child.id }}">{{ child.name }} ({{ child.group_name|default('без группы') }})</option>
-                {% endfor %}
+                {% if has_children_in_groups %}
+                <optgroup label="📋 Дети в ваших группах">
+                    {% for child in children %}
+                        {% if child.type == 'in_group' %}
+                        <option value="{{ child.id }}" data-type="in_group" data-group-id="{{ child.group_id }}" data-group-name="{{ child.group_name }}">
+                            {{ child.name }} ({{ child.group_name }}{% if child.status == 'waiting_list' %} - Лист ожидания{% endif %})
+                        </option>
+                        {% endif %}
+                    {% endfor %}
+                </optgroup>
+                {% endif %}
+
+                {% if has_children_without_group %}
+                <optgroup label="🆕 Дети без группы (ждут зачисления)">
+                    {% for child in children %}
+                        {% if child.type == 'without_group' %}
+                        <option value="{{ child.id }}" data-type="without_group" data-group-id="" data-group-name="">
+                            {{ child.name }}
+                            {% if child.class_num %}({{ child.class_num }} класс){% endif %}
+                            {% if child.parent_name %} - родитель: {{ child.parent_name }}{% endif %}
+                        </option>
+                        {% endif %}
+                    {% endfor %}
+                </optgroup>
+                {% endif %}
             </select>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" id="fromGroupBlock">
             <label class="required">Текущая группа</label>
-            <select name="from_group_id" required>
+            <select name="from_group_id" id="from_group_id">
                 <option value="">-- Выберите группу --</option>
-                {% for group in groups %}
-                <option value="{{ group.id }}">{{ group.name }}</option>
-                {% endfor %}
             </select>
+            <p class="form-hint" id="fromGroupHint">📌 Для детей без группы этот пункт не нужен</p>
         </div>
 
         <div class="form-group">
-            <label>Предлагаемая группа</label>
-            <select name="suggested_group_id">
+            <label>Предлагаемая группа (куда перевести/зачислить)</label>
+            <select name="suggested_group_id" id="suggested_group_id">
                 <option value="">-- Не выбрана --</option>
                 {% for group in groups %}
-                <option value="{{ group.id }}">{{ group.name }}</option>
+                <option value="{{ group.id }}" {% if not group.has_free_places %}style="color: #e74c3c;"{% endif %}>
+                    {{ group.name }} ({{ group.current_enrollment }}/{{ group.max_capacity }} мест)
+                    {% if not group.has_free_places %} - МЕСТ НЕТ{% endif %}
+                </option>
                 {% endfor %}
             </select>
+            <p class="form-hint">💡 Выберите группу для перевода или зачисления</p>
         </div>
 
         <div class="form-group">
             <label>Комментарий</label>
-            <textarea name="comment" rows="3" placeholder="Укажите причину перевода..."></textarea>
+            <textarea name="comment" rows="3" placeholder="Укажите причину перевода или зачисления..."></textarea>
         </div>
 
         <div style="display: flex; gap: 15px; margin-top: 30px;">
@@ -72,4 +103,79 @@
         </div>
     </form>
 </div>
+
+<style>
+    .form-hint {
+        display: block;
+        margin-top: 5px;
+        font-size: 12px;
+        color: #666;
+    }
+    optgroup {
+        font-weight: bold;
+        color: #2c3e50;
+    }
+    optgroup option {
+        font-weight: normal;
+        padding-left: 15px;
+    }
+</style>
+
+<script>
+    // Собираем данные о детях из шаблона
+    const childrenData = {{ children | tojson | safe }};
+
+    // Элементы DOM
+    const childSelect = document.getElementById('child_id');
+    const fromGroupBlock = document.getElementById('fromGroupBlock');
+    const fromGroupSelect = document.getElementById('from_group_id');
+    const fromGroupHint = document.getElementById('fromGroupHint');
+
+    function updateFromGroup() {
+        const selectedOption = childSelect.options[childSelect.selectedIndex];
+        const childType = selectedOption ? selectedOption.dataset.type : null;
+        const groupId = selectedOption ? selectedOption.dataset.groupId : null;
+        const groupName = selectedOption ? selectedOption.dataset.groupName : null;
+
+        if (childType === 'without_group') {
+            // Ребёнок без группы - скрываем поле "Текущая группа"
+            fromGroupBlock.style.display = 'none';
+            fromGroupSelect.required = false;
+            fromGroupSelect.value = '';
+            fromGroupHint.textContent = '✅ Для нового зачисления текущая группа не требуется';
+        } else if (childType === 'in_group') {
+            // Ребёнок в группе - показываем поле и заполняем
+            fromGroupBlock.style.display = 'block';
+            fromGroupSelect.required = true;
+
+            // Очищаем и заполняем select
+            fromGroupSelect.innerHTML = '<option value="">-- Выберите группу --</option>';
+
+            // Добавляем группу для этого ребёнка
+            childrenData.forEach(child => {
+                if (child.id == childSelect.value && child.type === 'in_group') {
+                    const option = document.createElement('option');
+                    option.value = child.group_id;
+                    option.textContent = child.group_name;
+                    if (child.status === 'waiting_list') {
+                        option.textContent += ' (Лист ожидания)';
+                    }
+                    fromGroupSelect.appendChild(option);
+                }
+            });
+            fromGroupHint.textContent = '📌 Выберите текущую группу ребёнка';
+        } else {
+            fromGroupBlock.style.display = 'block';
+            fromGroupSelect.required = false;
+        }
+    }
+
+    // Слушаем изменение выбора ребёнка
+    childSelect.addEventListener('change', updateFromGroup);
+
+    // Триггер для начальной загрузки (если уже выбран ребёнок)
+    if (childSelect.value) {
+        updateFromGroup();
+    }
+</script>
 {% endblock %}

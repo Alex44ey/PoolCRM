@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from threading import Thread
 from typing import Optional
 from datetime import datetime, date, timedelta
 import random
@@ -23,12 +24,22 @@ from database import (
     ApplicationStatus
 )
 
+from vk_bot import VK_ENABLED
 
 # ========== НАСТРОЙКА ==========
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("🚀 Запуск приложения...")
     Base.metadata.create_all(bind=engine)
+
+    try:
+        from vk_bot import start_vk_worker
+        thread = Thread(target=start_vk_worker, daemon=True)
+        thread.start()
+        print("🤖 VK бот запущен")
+    except Exception as e:
+        print(f"⚠️ Ошибка запуска VK бота: {e}")
+    
     print("✅ Приложение готово!")
     yield
 

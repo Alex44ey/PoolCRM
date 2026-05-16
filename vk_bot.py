@@ -27,7 +27,7 @@ VK_USER_TOKEN = "vk1.a.pyfkac7ghRZAJ8sQPjOdAAjAEJaf2Gp3MRPCNypYLE9nVs7y6y43bulnF
 VK_GROUP_ID = 0
 
 # Включить/выключить бота
-VK_ENABLED = False  # Поставьте True после настройки токена
+VK_ENABLED = True  # Поставьте True после настройки токена
 
 VK_API_VERSION = "5.131"
 
@@ -132,6 +132,11 @@ def send_attendance_notification_vk(
                 f"📅 {training.date.strftime('%d.%m.%Y')}\n"
                 f"👥 Группа: {group_name}\n\n"
                 f"Пожалуйста, сообщите тренеру о причинах пропуска."
+            )
+        elif status == "absent_excused":
+            message = (
+                f"ℹ️ {child.name} отсутствовал на тренировке по уважительной причине\n"
+                f"📅 {training.date.strftime('%d.%m.%Y')}"
             )
         else:
             return

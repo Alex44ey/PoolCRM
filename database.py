@@ -97,6 +97,28 @@ class ChildDB(Base):
     transfer_requests = relationship("TransferRequestDB", back_populates="child")
     applications = relationship("ApplicationDB", back_populates="child")  # <-- ДОБАВИТЬ
 
+
+# database.py - добавьте новый класс в конец файла перед Base.metadata.create_all
+
+class GalleryImageDB(Base):
+    __tablename__ = "gallery_images"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    filename = Column(String, nullable=False)
+    original_filename = Column(String, nullable=False)
+    file_size = Column(Integer, default=0)
+    image_type = Column(String)  # 'pool' - бассейн, 'coach' - тренер
+    coach_id = Column(Integer, ForeignKey("coaches.id"), nullable=True)  # для фото тренера
+    sort_order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    created_by = Column(String)  # кто загрузил
+    created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
+
+    # Связь с тренером
+    coach = relationship("CoachDB", back_populates="gallery_images")
+
 # ========== ТАБЛИЦА ТРЕНЕРОВ ==========
 class CoachDB(Base):
     __tablename__ = "coaches"
@@ -111,6 +133,7 @@ class CoachDB(Base):
 
     groups = relationship("GroupDB", back_populates="coach")
     transfer_requests = relationship("TransferRequestDB", back_populates="coach")
+    gallery_images = relationship("GalleryImageDB", back_populates="coach")
 
 # ========== ТАБЛИЦА ГРУПП ==========
 class GroupDB(Base):
@@ -303,3 +326,4 @@ def get_user_by_email(db: Session, email: str, password: str):
         return {"id": coach.id, "role": "coach", "name": coach.name, "data": coach}
 
     return None
+

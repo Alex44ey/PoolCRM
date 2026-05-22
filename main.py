@@ -23,6 +23,7 @@ from database import (
     ApplicationStatus
 )
 
+from fastapi.staticfiles import StaticFiles
 
 # ========== НАСТРОЙКА ==========
 @asynccontextmanager
@@ -34,7 +35,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Pool CRM", version="1.0.0", lifespan=lifespan)
-
+app.mount("/static", StaticFiles(directory="static"), name="static")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

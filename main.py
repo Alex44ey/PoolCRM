@@ -1946,7 +1946,10 @@ async def gallery_page(request: Request, db: Session = Depends(get_db)):
     if user and user["role"] == "admin":
         coaches = db.query(CoachDB).filter(CoachDB.is_active == True).all()
 
-    return templates.TemplateResponse("gallery.html", {
+    return templates.TemplateResponse(
+        name = "gallery.html",
+        request = request,
+        context = {
         "request": request,
         "user": user,
         "images": images_data,

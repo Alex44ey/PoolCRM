@@ -3,91 +3,70 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="header">
-    <div class="logo">
-        <h1>🐬 Pool CRM</h1>
-        <p>Система управления бассейном</p>
+<h2>{{ title }}</h2>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<form method="POST">
+    <div class="form-group">
+        <label class="required">ФИО ребёнка</label>
+        <input type="text" name="name" required value="{{ child.name|default('') }}">
     </div>
-    <div class="user-info">
-        <span class="user-name">{{ user.name }}</span>
-        <span class="user-role">Родитель</span>
-        <a href="/logout" class="logout-btn">Выйти</a>
+
+    <div class="form-row">
+        <div class="form-group">
+            <label class="required">Дата рождения</label>
+            <input type="date" name="birthdate" required value="{{ child.birthdate|default('') }}">
+        </div>
+        <div class="form-group">
+            <label>Класс</label>
+            <input type="number" name="class_num" min="0" max="11" value="{{ child.class_num|default('') }}">
+        </div>
     </div>
-</div>
 
-<div class="nav-menu">
-    <a href="/dashboard" class="nav-link">📊 Дашборд</a>
-    <a href="/gallery" class="nav-link">🖼️ Галерея</a>
-    <a href="/children" class="nav-link active">👶 Мои дети</a>
-    <a href="/profile" class="nav-link">⚙️ Настройки</a>
-</div>
-
-<div class="content">
-    <h2>{{ title }}</h2>
-
-    {% if error %}
-    <div class="alert alert-error">{{ error }}</div>
-    {% endif %}
-
-    <form method="POST">
+    <div class="form-row">
         <div class="form-group">
-            <label class="required">ФИО ребёнка</label>
-            <input type="text" name="name" required value="{{ child.name|default('') }}">
-        </div>
-
-        <div class="form-row">
-            <div class="form-group">
-                <label class="required">Дата рождения</label>
-                <input type="date" name="birthdate" required value="{{ child.birthdate|default('') }}">
-            </div>
-            <div class="form-group">
-                <label>Класс</label>
-                <input type="number" name="class_num" min="0" max="11" value="{{ child.class_num|default('') }}">
-            </div>
-        </div>
-
-        <div class="form-row">
-            <div class="form-group">
-                <label>Год обучения (уровень подготовки)</label>
-                <select name="study_year">
-                    <option value="">-- Выберите уровень --</option>
-                    <option value="1" {% if child.study_year == 1 %}selected{% endif %}>1 год (Начинающий)</option>
-                    <option value="2" {% if child.study_year == 2 %}selected{% endif %}>2 года (Продолжающий)</option>
-                    <option value="3" {% if child.study_year == 3 %}selected{% endif %}>3 года (Продвинутый)</option>
-                    <option value="4" {% if child.study_year == 4 %}selected{% endif %}>4+ лет (Спортивный)</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="form-group">
-            <label>Группа для зачисления</label>
-            <select name="group_id">
-                <option value="">-- Без группы (только регистрация) --</option>
-                {% for group in groups %}
-                <option value="{{ group.id }}" {% if selected_group_id == group.id %}selected{% endif %}>
-                    {{ group.name }} ({{ group.current_enrollment }}/{{ group.max_capacity }} мест)
-                    {% if group.current_enrollment >= group.max_capacity %} - МЕСТ НЕТ{% endif %}
-                </option>
-                {% endfor %}
+            <label>Год обучения (уровень подготовки)</label>
+            <select name="study_year">
+                <option value="">-- Выберите уровень --</option>
+                <option value="1" {% if child.study_year == 1 %}selected{% endif %}>1 год (Начинающий)</option>
+                <option value="2" {% if child.study_year == 2 %}selected{% endif %}>2 года (Продолжающий)</option>
+                <option value="3" {% if child.study_year == 3 %}selected{% endif %}>3 года (Продвинутый)</option>
+                <option value="4" {% if child.study_year == 4 %}selected{% endif %}>4+ лет (Спортивный)</option>
             </select>
-            {% if groups %}
-            <small class="form-hint">💡 Вы можете зачислить ребёнка в группу сейчас или сделать это позже в личном кабинете</small>
-            {% else %}
-            <small class="form-hint warning">⚠️ Нет доступных групп. Сначала создайте группы в админ-панели.</small>
-            {% endif %}
         </div>
+    </div>
 
-        <div class="form-group">
-            <label>Медицинские показания/противопоказания</label>
-            <textarea name="medical_note" rows="3" placeholder="Укажите медицинские особенности, если есть">{{ child.medical_note|default('') }}</textarea>
-        </div>
+    <div class="form-group">
+        <label>Группа для зачисления</label>
+        <select name="group_id">
+            <option value="">-- Без группы (только регистрация) --</option>
+            {% for group in groups %}
+            <option value="{{ group.id }}" {% if selected_group_id == group.id %}selected{% endif %}>
+                {{ group.name }} ({{ group.current_enrollment }}/{{ group.max_capacity }} мест)
+                {% if group.current_enrollment >= group.max_capacity %} - МЕСТ НЕТ{% endif %}
+            </option>
+            {% endfor %}
+        </select>
+        {% if groups %}
+        <small class="form-hint">💡 Вы можете зачислить ребёнка в группу сейчас или сделать это позже в личном кабинете</small>
+        {% else %}
+        <small class="form-hint warning">⚠️ Нет доступных групп. Сначала создайте группы в админ-панели.</small>
+        {% endif %}
+    </div>
 
-        <div style="display: flex; gap: 15px; margin-top: 30px;">
-            <button type="submit" class="btn btn-primary">Сохранить</button>
-            <a href="/children" class="btn btn-secondary">Отмена</a>
-        </div>
-    </form>
-</div>
+    <div class="form-group">
+        <label>Медицинские показания/противопоказания</label>
+        <textarea name="medical_note" rows="3" placeholder="Укажите медицинские особенности, если есть">{{ child.medical_note|default('') }}</textarea>
+    </div>
+
+    <div style="display: flex; gap: 15px; margin-top: 30px;">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <a href="/children" class="btn btn-secondary">Отмена</a>
+    </div>
+</form>
 
 <style>
     .form-hint {

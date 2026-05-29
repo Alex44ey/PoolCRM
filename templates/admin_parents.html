@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}Управление родителями{% endblock %}
+
+{% block content %}
+<div class="action-bar">
+    <h2>Управление родителями</h2>
+</div>
+
+{% if request.query_params.get('success') %}
+<div class="alert alert-success">{{ request.query_params.get('success') }}</div>
+{% endif %}
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>ФИО</th>
+            <th>Email</th>
+            <th>Телефон</th>
+            <th>Детей</th>
+            <th>VK</th>
+            <th>Дата регистрации</th>
+            <th>Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for parent in parents %}
+        <tr>
+            <td>{{ parent.id }}</td>
+            <td>{{ parent.name }}</td>
+            <td>{{ parent.email }}</td>
+            <td>{{ parent.phone or '-' }}</td>
+            <td>{{ parent.children_count }}</td>
+            <td>
+                {% if parent.is_vk_linked %}
+                ✅ Привязан
+                {% else %}
+                ❌ Не привязан
+                {% endif %}
+            </td>
+            <td>{{ parent.created_at }}</td>
+            <td>
+                <a href="/parents/{{ parent.id }}/delete" 
+                   class="btn btn-sm btn-danger" 
+                   onclick="return confirm('Удалить родителя {{ parent.name }}? Все его дети также будут деактивированы.')">
+                    🗑️ Удалить
+                </a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

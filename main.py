@@ -1,5 +1,3 @@
-# main.py (ЧАСТЬ 1/2) - Веб-приложение Pool CRM
-
 from fastapi import FastAPI, Request, Form, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -329,6 +327,112 @@ def get_training_or_404(training_id: int, db: Session) -> TrainingDB:
     return training
 
 
+# ========== КАСКАДНЫЕ ОПЕРАЦИИ ==========
+
+def delete_coach_cascade(coach_id: int, db: Session) -> dict:
+    """
+    Каскадное удаление тренера:
+    1. Находит все группы тренера
+    2. Очищает coach_id у этих групп (тренер больше не назначен)
+    3. Удаляет все time_slots этих групп (расписание)
+    4. Деактивирует тренера
+    """
+    result = {
+        "groups_cleared": 0,
+        "time_slots_deleted": 0,
+        "trainings_affected": 0
+    }
+    
+    # Находим все группы тренера
+    groups = db.query(GroupDB).filter(GroupDB.coach_id == coach_id, GroupDB.is_active == True).all()
+    
+    for group in groups:
+        # Очищаем coach_id у группы
+        group.coach_id = None
+        result["groups_cleared"] += 1
+        
+        # Находим и удаляем все time_slots этой группы
+        time_slots = db.query(TimeSlotDB).filter(TimeSlotDB.group_id == group.id).all()
+        for slot in time_slots:
+            # Находим все тренировки по этому слоту
+            trainings = db.query(TrainingDB).filter(TrainingDB.time_slot_id == slot.id).all()
+            for training in trainings:
+                # Удаляем отметки посещаемости
+                db.query(AttendanceDB).filter(AttendanceDB.training_id == training.id).delete()
+                result["trainings_affected"] += 1
+            # Удаляем тренировки
+            db.query(TrainingDB).filter(TrainingDB.time_slot_id == slot.id).delete()
+            # Удаляем слот
+            db.delete(slot)
+            result["time_slots_deleted"] += 1
+    
+    return result
+
+
+def delete_group_cascade(group_id: int, db: Session) -> dict:
+    """
+    Каскадное удаление группы:
+    1. Удаляет все time_slots группы
+    2. Удаляет все тренировки группы и их посещаемость
+    3. Закрывает все активные зачисления (переводит в COMPLETED)
+    4. Деактивирует группу
+    """
+    result = {
+        "enrollments_closed": 0,
+        "trainings_deleted": 0,
+        "attendances_deleted": 0,
+        "time_slots_deleted": 0
+    }
+    
+    # Закрываем активные зачисления
+    enrollments = db.query(EnrollmentDB).filter(
+        EnrollmentDB.group_id == group_id,
+        EnrollmentDB.status == EnrollmentStatus.ACTIVE
+    ).all()
+    for enrollment in enrollments:
+        enrollment.status = EnrollmentStatus.COMPLETED
+        enrollment.end_date = date.today()
+        result["enrollments_closed"] += 1
+    
+    # Удаляем time_slots и связанные тренировки
+    time_slots = db.query(TimeSlotDB).filter(TimeSlotDB.group_id == group_id).all()
+    for slot in time_slots:
+        # Удаляем посещаемость всех тренировок этого слота
+        trainings = db.query(TrainingDB).filter(TrainingDB.time_slot_id == slot.id).all()
+        for training in trainings:
+            deleted = db.query(AttendanceDB).filter(AttendanceDB.training_id == training.id).delete()
+            result["attendances_deleted"] += deleted
+            result["trainings_deleted"] += 1
+        # Удаляем тренировки
+        db.query(TrainingDB).filter(TrainingDB.time_slot_id == slot.id).delete()
+        # Удаляем слот
+        db.delete(slot)
+        result["time_slots_deleted"] += 1
+    
+    return result
+
+
+def delete_child_cascade(child_id: int, db: Session) -> dict:
+    """
+    Каскадное удаление ребёнка:
+    1. Закрывает все активные зачисления
+    2. Деактивирует ребёнка
+    """
+    result = {"enrollments_closed": 0}
+    
+    # Закрываем активные зачисления
+    enrollments = db.query(EnrollmentDB).filter(
+        EnrollmentDB.child_id == child_id,
+        EnrollmentDB.status == EnrollmentStatus.ACTIVE
+    ).all()
+    for enrollment in enrollments:
+        enrollment.status = EnrollmentStatus.COMPLETED
+        enrollment.end_date = date.today()
+        result["enrollments_closed"] += 1
+    
+    return result
+
+
 # ========== АУТЕНТИФИКАЦИЯ ==========
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, db: Session = Depends(get_db)):
@@ -450,7 +554,7 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(name="dashboard.html", request=request, context={"request": request, "user": user, "stats": stats})
 
 
-# ========== ДЕТИ (ВЕБ) ==========
+# ========== ДЕТИ ==========
 @app.get("/children", response_class=HTMLResponse)
 async def children_list(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
@@ -531,18 +635,19 @@ async def edit_child(request: Request, child_id: int, name: str = Form(...), bir
 
 @app.get("/children/{child_id}/delete")
 async def delete_child(request: Request, child_id: int, db: Session = Depends(get_db)):
+    """Удаление ребёнка с закрытием его зачислений"""
     user = get_current_user(request, db)
     if not user or user["role"] != "admin":
         return RedirectResponse(url="/dashboard")
-    child = db.query(ChildDB).filter(ChildDB.id == child_id).first()
-    if child:
-        child.is_active = False
-        enrollments = db.query(EnrollmentDB).filter(EnrollmentDB.child_id == child_id, EnrollmentDB.status == EnrollmentStatus.ACTIVE).all()
-        for enrollment in enrollments:
-            enrollment.status = EnrollmentStatus.COMPLETED
-            enrollment.end_date = date.today()
-        db.commit()
-    return RedirectResponse(url="/children", status_code=303)
+    
+    child = get_child_or_404(child_id, db)
+    child_name = child.name
+    result = delete_child_cascade(child_id, db)
+    child.is_active = False
+    db.commit()
+    message = f"Ребёнок {child_name} удалён. Закрыто зачислений: {result['enrollments_closed']}"
+    
+    return RedirectResponse(url=f"/children?success={message}", status_code=303)
 
 
 @app.post("/children/{child_id}/enroll")
@@ -578,8 +683,45 @@ async def disenroll_child_from_group(request: Request, child_id: int, enrollment
         db.commit()
     return RedirectResponse(url=f"/children/{child_id}", status_code=303)
 
+# ========== РОДИТЕЛИ ==========
 
-# ========== ГРУППЫ (ВЕБ) ==========
+@app.get("/parents/{parent_id}/delete")
+async def delete_parent(request: Request, parent_id: int, db: Session = Depends(get_db)):
+    """Удаление родителя с деактивацией всех его детей"""
+    user = get_current_user(request, db)
+    if not user or user["role"] != "admin":
+        return RedirectResponse(url="/dashboard")
+    
+    parent = db.query(ParentDB).filter(ParentDB.id == parent_id).first()
+    if not parent:
+        return RedirectResponse(url="/dashboard?error=Parent not found", status_code=303)
+    
+    parent_name = parent.name
+    
+    # Деактивируем всех детей родителя
+    children = db.query(ChildDB).filter(ChildDB.parent_id == parent_id, ChildDB.is_active == True).all()
+    children_count = 0
+    for child in children:
+        child.is_active = False
+        # Закрываем зачисления
+        enrollments = db.query(EnrollmentDB).filter(
+            EnrollmentDB.child_id == child.id,
+            EnrollmentDB.status == EnrollmentStatus.ACTIVE
+        ).all()
+        for enrollment in enrollments:
+            enrollment.status = EnrollmentStatus.COMPLETED
+            enrollment.end_date = date.today()
+        children_count += 1
+    
+    # Деактивируем родителя
+    parent.is_active = False
+    db.commit()
+    
+    message = f"Родитель {parent_name} удалён. Деактивировано детей: {children_count}"
+    
+    return RedirectResponse(url=f"/dashboard?success={message}", status_code=303)
+
+# ========== ГРУППЫ ==========
 @app.get("/groups", response_class=HTMLResponse)
 async def groups_list(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
@@ -656,95 +798,26 @@ async def edit_group(request: Request, group_id: int, name: str = Form(...), lev
 
 @app.get("/groups/{group_id}/delete")
 async def delete_group(request: Request, group_id: int, db: Session = Depends(get_db)):
+    """Удаление группы с каскадным удалением расписания и закрытием зачислений"""
     user = get_current_user(request, db)
     if not user or user["role"] != "admin":
         return RedirectResponse(url="/dashboard")
+    
     group = get_group_or_404(group_id, db)
+    group_name = group.name
+    result = delete_group_cascade(group_id, db)
     group.is_active = False
     db.commit()
-    return RedirectResponse(url="/groups", status_code=303)
+    
+    message = f"Группа '{group_name}' удалена. " \
+              f"Закрыто зачислений: {result['enrollments_closed']}, " \
+              f"удалено тренировок: {result['trainings_deleted']}, " \
+              f"удалено слотов расписания: {result['time_slots_deleted']}"
+    
+    return RedirectResponse(url=f"/groups?success={message}", status_code=303)
 
 
-# ========== ГРУППЫ (API) ==========
-@app.get("/api/groups", response_model=List[GroupResponse])
-async def api_get_groups(coach_id: Optional[int] = None, db: Session = Depends(get_db)):
-    query = db.query(GroupDB).filter(GroupDB.is_active == True)
-    if coach_id:
-        query = query.filter(GroupDB.coach_id == coach_id)
-    groups = query.all()
-    result = []
-    for group in groups:
-        current_count = db.query(EnrollmentDB).filter(
-            EnrollmentDB.group_id == group.id,
-            EnrollmentDB.status == EnrollmentStatus.ACTIVE
-        ).count()
-        result.append(GroupResponse(
-            id=group.id, name=group.name, level=group.level,
-            coach_id=group.coach_id, coach_name=group.coach.name if group.coach else None,
-            max_capacity=group.max_capacity, current_enrollment=current_count, is_active=group.is_active
-        ))
-    return result
-
-
-@app.get("/api/groups/{group_id}", response_model=GroupResponse)
-async def api_get_group(group_id: int, db: Session = Depends(get_db)):
-    group = get_group_or_404(group_id, db)
-    current_count = db.query(EnrollmentDB).filter(
-        EnrollmentDB.group_id == group.id,
-        EnrollmentDB.status == EnrollmentStatus.ACTIVE
-    ).count()
-    return GroupResponse(
-        id=group.id, name=group.name, level=group.level,
-        coach_id=group.coach_id, coach_name=group.coach.name if group.coach else None,
-        max_capacity=group.max_capacity, current_enrollment=current_count, is_active=group.is_active
-    )
-
-
-@app.post("/api/groups", response_model=GroupResponse, status_code=201)
-async def api_create_group(group_data: GroupCreate, db: Session = Depends(get_db)):
-    group = GroupDB(
-        name=group_data.name, level=group_data.level,
-        coach_id=group_data.coach_id, max_capacity=group_data.max_capacity
-    )
-    db.add(group)
-    db.commit()
-    db.refresh(group)
-    return GroupResponse(
-        id=group.id, name=group.name, level=group.level,
-        coach_id=group.coach_id, coach_name=group.coach.name if group.coach else None,
-        max_capacity=group.max_capacity, current_enrollment=0, is_active=group.is_active
-    )
-
-
-@app.put("/api/groups/{group_id}", response_model=GroupResponse)
-async def api_update_group(group_id: int, group_data: GroupCreate, db: Session = Depends(get_db)):
-    group = get_group_or_404(group_id, db)
-    group.name = group_data.name
-    group.level = group_data.level
-    group.coach_id = group_data.coach_id
-    group.max_capacity = group_data.max_capacity
-    db.commit()
-    db.refresh(group)
-    current_count = db.query(EnrollmentDB).filter(
-        EnrollmentDB.group_id == group.id,
-        EnrollmentDB.status == EnrollmentStatus.ACTIVE
-    ).count()
-    return GroupResponse(
-        id=group.id, name=group.name, level=group.level,
-        coach_id=group.coach_id, coach_name=group.coach.name if group.coach else None,
-        max_capacity=group.max_capacity, current_enrollment=current_count, is_active=group.is_active
-    )
-
-
-@app.delete("/api/groups/{group_id}")
-async def api_delete_group(group_id: int, db: Session = Depends(get_db)):
-    group = get_group_or_404(group_id, db)
-    group.is_active = False
-    db.commit()
-    return {"message": "Group deleted"}
-
-
-# ========== ТРЕНЕРЫ (ВЕБ) ==========
+# ========== ТРЕНЕРЫ ==========
 @app.get("/trainers", response_class=HTMLResponse)
 async def trainers_list(request: Request, db: Session = Depends(get_db)):
     user = get_current_user(request, db)
@@ -807,13 +880,27 @@ async def edit_trainer(request: Request, coach_id: int, name: str = Form(...), e
 
 @app.get("/trainers/{coach_id}/delete")
 async def delete_trainer(request: Request, coach_id: int, db: Session = Depends(get_db)):
+    """Удаление тренера с каскадным очищением расписания"""
     user = get_current_user(request, db)
     if not user or user["role"] != "admin":
         return RedirectResponse(url="/dashboard")
+    
     coach = get_coach_or_404(coach_id, db)
+    
+    # Каскадное удаление
+    result = delete_coach_cascade(coach_id, db)
+    
+    # Деактивируем тренера
     coach.is_active = False
     db.commit()
-    return RedirectResponse(url="/trainers", status_code=303)
+    
+    # Сообщение с деталями
+    message = f"Тренер {coach.name} уволен. " \
+              f"Очищено групп: {result['groups_cleared']}, " \
+              f"удалено слотов расписания: {result['time_slots_deleted']}, " \
+              f"затронуто тренировок: {result['trainings_affected']}"
+    
+    return RedirectResponse(url=f"/trainers?success={message}", status_code=303)
 
 
 # ========== ТРЕНИРОВКИ ==========
@@ -1380,6 +1467,57 @@ async def reorder_gallery_image(request: Request, image_id: int, action: str = F
             next_img.sort_order, image.sort_order = image.sort_order, next_img.sort_order
     db.commit()
     return RedirectResponse(url="/gallery", status_code=303)
+
+# ========== АДМИН ==========
+
+@app.get("/admin/parents", response_class=HTMLResponse)
+async def admin_parents_list(request: Request, db: Session = Depends(get_db)):
+    """Список всех родителей (только для админа)"""
+    user = get_current_user(request, db)
+    if not user or user["role"] != "admin":
+        return RedirectResponse(url="/dashboard")
+    
+    parents = db.query(ParentDB).filter(ParentDB.is_active == True).all()
+    
+    parents_data = []
+    for parent in parents:
+        children_count = db.query(ChildDB).filter(ChildDB.parent_id == parent.id, ChildDB.is_active == True).count()
+        parents_data.append({
+            "id": parent.id,
+            "name": parent.name,
+            "email": parent.email,
+            "phone": parent.phone,
+            "children_count": children_count,
+            "is_vk_linked": parent.is_vk_linked,
+            "created_at": parent.created_at
+        })
+    
+    return templates.TemplateResponse(
+        name="admin_parents.html",
+        request=request,
+        context={"request": request, "user": user, "parents": parents_data}
+    )
+
+@app.get("/404")
+async def custom_404(request: Request, db: Session = Depends(get_db)):
+    """Страница 404"""
+    user = get_current_user(request, db)
+    return templates.TemplateResponse(
+        name="404.html",
+        request=request,
+        context={"request": request, "user": user}
+    )
+
+@app.get("/{full_path:path}")
+async def catch_all(request: Request, full_path: str, db: Session = Depends(get_db)):
+    """Обработка всех несуществующих маршрутов"""
+    user = get_current_user(request, db)
+    return templates.TemplateResponse(
+        name="404.html",
+        request=request,
+        context={"request": request, "user": user},
+        status_code=404
+    )
 
 
 # ========== ЗАПУСК ==========

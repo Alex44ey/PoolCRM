@@ -3,138 +3,96 @@
 {% block title %}Переводы{% endblock %}
 
 {% block content %}
-<div class="header">
-    <div class="logo">
-        <h1>🐬 Pool CRM</h1>
-        <p>Система управления бассейном</p>
-    </div>
-    <div class="user-info">
-        <span class="user-name">{{ user.name }}</span>
-        <span class="user-role">
-            {% if user.role == 'admin' %}Администратор
-            {% elif user.role == 'coach' %}Тренер
-            {% else %}Родитель{% endif %}
-        </span>
-        <a href="/logout" class="logout-btn">Выйти</a>
-    </div>
-</div>
-
-<div class="nav-menu">
-    <a href="/dashboard" class="nav-link">📊 Дашборд</a>
-    <a href="/gallery" class="nav-link">🖼️ Галерея</a>
-    {% if user.role == 'parent' %}
-    <a href="/children" class="nav-link">👶 Мои дети</a>
-    <a href="/profile" class="nav-link">⚙️ Настройки</a>
-    {% endif %}
+<div class="action-bar">
+    <h2>Запросы на перевод и зачисление</h2>
     {% if user.role == 'coach' %}
-    <a href="/groups" class="nav-link">👥 Мои группы</a>
-    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
-    <a href="/attendance" class="nav-link">📊 Посещаемость</a>
-    <a href="/transfers" class="nav-link active">🔄 Переводы</a>
-    {% endif %}
-    {% if user.role == 'admin' %}
-    <a href="/children" class="nav-link">👶 Дети</a>
-    <a href="/groups" class="nav-link">👥 Группы</a>
-    <a href="/trainers" class="nav-link">🏊‍♂️ Тренеры</a>
-    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
-    <a href="/attendance" class="nav-link">📊 Посещаемость</a>
-    <a href="/applications" class="nav-link">📋 Заявки</a>
-    <a href="/transfers" class="nav-link active">🔄 Переводы</a>
+    <a href="/transfers/add" class="btn btn-primary">+ Создать запрос</a>
     {% endif %}
 </div>
 
-<div class="content">
-    <div class="action-bar">
-        <h2>Запросы на перевод и зачисление</h2>
-        {% if user.role == 'coach' %}
-        <a href="/transfers/add" class="btn btn-primary">+ Создать запрос</a>
-        {% endif %}
-    </div>
+{% if success %}
+<div class="alert alert-success">{{ success }}</div>
+{% endif %}
 
-    {% if success %}
-    <div class="alert alert-success">{{ success }}</div>
-    {% endif %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Ребёнок</th>
+            <th>Из группы</th>
+            <th>В группу</th>
+            <th>Тренер</th>
+            <th>Комментарий</th>
+            <th>Статус</th>
+            <th>Дата</th>
+            <th>Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for transfer in transfers %}
+        <tr>
+            <td>{{ transfer.id }}</td>
+            <td>{{ transfer.child_name }}</td>
+            <td>
+                {% if transfer.from_group_name %}
+                    {{ transfer.from_group_name }}
+                {% else %}
+                    <span style="color: #27ae60; font-weight: bold;">🆕 Новое зачисление</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if transfer.suggested_group_name %}
+                    {{ transfer.suggested_group_name }}
+                {% else %}
+                    <span style="color: #e67e22;">На усмотрение админа</span>
+                {% endif %}
+            </td>
+            <td>{{ transfer.coach_name }}</td>
+            <td>
+                {% if transfer.comment %}
+                    {{ transfer.comment|truncate(50) if transfer.comment|length > 50 else transfer.comment }}
+                {% else %}
+                    —
+                {% endif %}
+            </td>
+            <td>
+                <span class="status-badge
+                    {% if transfer.status == 'approved' %}status-approved
+                    {% elif transfer.status == 'rejected' %}status-rejected
+                    {% else %}status-pending{% endif %}">
+                    {% if transfer.status == 'pending' %}⏳ На рассмотрении
+                    {% elif transfer.status == 'approved' %}✅ Одобрен
+                    {% else %}❌ Отклонён{% endif %}
+                </span>
+            </td>
+            <td>{{ transfer.created_at }}</td>
+            <td>
+                {% if transfer.status == 'pending' and user.role == 'admin' %}
+                <div style="display: flex; gap: 5px;">
+                    <a href="/transfers/{{ transfer.id }}/approve" class="btn btn-sm btn-success" onclick="return confirm('Одобрить перевод?')">✅</a>
+                    <a href="/transfers/{{ transfer.id }}/reject" class="btn btn-sm btn-danger" onclick="return confirm('Отклонить перевод?')">❌</a>
+                </div>
+                {% elif transfer.status == 'pending' %}
+                    <span style="color: #f39c12;">⏳ Ожидает</span>
+                {% elif transfer.status == 'approved' %}
+                    <span style="color: #27ae60;">✓ Выполнен</span>
+                {% else %}
+                    <span style="color: #e74c3c;">✗ Отклонён</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
 
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Ребёнок</th>
-                <th>Из группы</th>
-                <th>В группу</th>
-                <th>Тренер</th>
-                <th>Комментарий</th>
-                <th>Статус</th>
-                <th>Дата</th>
-                <th>Действия</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for transfer in transfers %}
-            <tr>
-                <td>{{ transfer.id }}</td>
-                <td>{{ transfer.child_name }}</td>
-                <td>
-                    {% if transfer.from_group_name %}
-                        {{ transfer.from_group_name }}
-                    {% else %}
-                        <span style="color: #27ae60; font-weight: bold;">🆕 Новое зачисление</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if transfer.suggested_group_name %}
-                        {{ transfer.suggested_group_name }}
-                    {% else %}
-                        <span style="color: #e67e22;">На усмотрение админа</span>
-                    {% endif %}
-                </td>
-                <td>{{ transfer.coach_name }}</td>
-                <td class="px-4 py-3">
-                    {% if transfer.comment %}
-                        {{ transfer.comment|truncate(50) if transfer.comment|length > 50 else transfer.comment }}
-                    {% else %}
-                        —
-                    {% endif %}
-                </td>
-                <td>
-                    <span class="status-badge
-                        {% if transfer.status == 'approved' %}status-approved
-                        {% elif transfer.status == 'rejected' %}status-rejected
-                        {% else %}status-pending{% endif %}">
-                        {% if transfer.status == 'pending' %}⏳ На рассмотрении
-                        {% elif transfer.status == 'approved' %}✅ Одобрен
-                        {% else %}❌ Отклонён{% endif %}
-                    </span>
-                </td>
-                <td>{{ transfer.created_at }}</td>
-                <td>
-                    {% if transfer.status == 'pending' and user.role == 'admin' %}
-                    <div style="display: flex; gap: 5px;">
-                        <a href="/transfers/{{ transfer.id }}/approve" class="btn btn-sm btn-success" onclick="return confirm('Одобрить перевод?')" title="Одобрить">✅</a>
-                        <a href="/transfers/{{ transfer.id }}/reject" class="btn btn-sm btn-danger" onclick="return confirm('Отклонить перевод?')" title="Отклонить">❌</a>
-                    </div>
-                    {% elif transfer.status == 'pending' %}
-                        <span style="color: #f39c12;">⏳ Ожидает</span>
-                    {% elif transfer.status == 'approved' %}
-                        <span style="color: #27ae60;">✓ Выполнен</span>
-                    {% else %}
-                        <span style="color: #e74c3c;">✗ Отклонён</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    {% if not transfers %}
-    <div class="alert alert-info">
-        Нет запросов на перевод
-        {% if user.role == 'coach' %}
-        <br><a href="/transfers/add" class="btn btn-sm btn-primary" style="margin-top: 10px;">Создать первый запрос</a>
-        {% endif %}
-    </div>
+{% if not transfers %}
+<div class="alert alert-info">
+    Нет запросов на перевод
+    {% if user.role == 'coach' %}
+    <br><a href="/transfers/add" class="btn btn-sm btn-primary" style="margin-top: 10px;">Создать первый запрос</a>
     {% endif %}
 </div>
+{% endif %}
 
 <style>
     .status-badge {

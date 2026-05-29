@@ -3,169 +3,120 @@
 {% block title %}Галерея{% endblock %}
 
 {% block content %}
-<div class="header">
-    <div class="logo">
-        <h1>🐬 Pool CRM</h1>
-        <p>Система управления бассейном</p>
-    </div>
-    {% if user %}
-    <div class="user-info">
-        <span class="user-name">{{ user.name }}</span>
-        <span class="user-role">
-            {% if user.role == 'admin' %}Администратор
-            {% elif user.role == 'coach' %}Тренер
-            {% else %}Родитель{% endif %}
-        </span>
-        <a href="/logout" class="logout-btn">Выйти</a>
-    </div>
-    {% endif %}
-</div>
-
-<div class="nav-menu">
-    <a href="/dashboard" class="nav-link">📊 Дашборд</a>
-    <a href="/gallery" class="nav-link active">🖼️ Галерея</a>
-    {% if user %}
-        {% if user.role == 'parent' %}
-        <a href="/children" class="nav-link">👶 Мои дети</a>
-        <a href="/profile" class="nav-link">⚙️ Настройки</a>
-        {% endif %}
-        {% if user.role == 'coach' %}
-        <a href="/groups" class="nav-link">👥 Мои группы</a>
-        <a href="/trainings" class="nav-link">🏊 Тренировки</a>
-        <a href="/attendance" class="nav-link">📊 Посещаемость</a>
-        <a href="/transfers" class="nav-link">🔄 Переводы</a>
-        {% endif %}
-        {% if user.role == 'admin' %}
-        <a href="/children" class="nav-link">👶 Дети</a>
-        <a href="/groups" class="nav-link">👥 Группы</a>
-        <a href="/trainers" class="nav-link">🏊‍♂️ Тренеры</a>
-        <a href="/trainings" class="nav-link">🏊 Тренировки</a>
-        <a href="/attendance" class="nav-link">📊 Посещаемость</a>
-        <a href="/applications" class="nav-link">📋 Заявки</a>
-        <a href="/transfers" class="nav-link">🔄 Переводы</a>
-        {% endif %}
-    {% else %}
-        <a href="/login" class="nav-link">🔑 Вход</a>
-        <a href="/register" class="nav-link">📝 Подать заявку</a>
-    {% endif %}
-</div>
-
-<div class="content">
-    <div class="action-bar">
-        <h2>🏊 Фотогалерея</h2>
-        {% if user and user.role == 'admin' %}
-        <button class="btn btn-primary" onclick="toggleUploadForm()">+ Добавить фото</button>
-        {% endif %}
-    </div>
-
-    {% if request.query_params.get('success') %}
-    <div class="alert alert-success">{{ request.query_params.get('success') }}</div>
-    {% endif %}
-    {% if request.query_params.get('error') %}
-    <div class="alert alert-error">{{ request.query_params.get('error') }}</div>
-    {% endif %}
-
-    <!-- Форма загрузки (только для админа) -->
+<div class="action-bar">
+    <h2>🏊 Фотогалерея</h2>
     {% if user and user.role == 'admin' %}
-    <div id="uploadForm" class="upload-form" style="display: none;">
-        <h3>📸 Добавить новое фото</h3>
-        <form method="POST" action="/gallery/upload" enctype="multipart/form-data">
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="required">Название</label>
-                    <input type="text" name="title" required>
-                </div>
-                <div class="form-group">
-                    <label>Тип фото</label>
-                    <select name="image_type" id="imageType" required>
-                        <option value="pool">🏊 Бассейн</option>
-                        <option value="coach">🏊‍♂️ Тренер</option>
-                    </select>
-                </div>
-            </div>
+    <button class="btn btn-primary" onclick="toggleUploadForm()">+ Добавить фото</button>
+    {% endif %}
+</div>
 
-            <div class="form-group" id="coachSelect" style="display: none;">
-                <label>Тренер</label>
-                <select name="coach_id">
-                    <option value="">Выберите тренера</option>
-                    {% for coach in coaches %}
-                    <option value="{{ coach.id }}">{{ coach.name }}</option>
-                    {% endfor %}
+{% if request.query_params.get('success') %}
+<div class="alert alert-success">{{ request.query_params.get('success') }}</div>
+{% endif %}
+{% if request.query_params.get('error') %}
+<div class="alert alert-error">{{ request.query_params.get('error') }}</div>
+{% endif %}
+
+<!-- Форма загрузки (только для админа) -->
+{% if user and user.role == 'admin' %}
+<div id="uploadForm" class="upload-form" style="display: none;">
+    <h3>📸 Добавить новое фото</h3>
+    <form method="POST" action="/gallery/upload" enctype="multipart/form-data">
+        <div class="form-row">
+            <div class="form-group">
+                <label class="required">Название</label>
+                <input type="text" name="title" required>
+            </div>
+            <div class="form-group">
+                <label>Тип фото</label>
+                <select name="image_type" id="imageType" required>
+                    <option value="pool">🏊 Бассейн</option>
+                    <option value="coach">🏊‍♂️ Тренер</option>
                 </select>
             </div>
-
-            <div class="form-group">
-                <label>Описание</label>
-                <textarea name="description" rows="3" placeholder="Краткое описание фото..."></textarea>
-            </div>
-
-            <div class="form-group">
-                <label class="required">Файл</label>
-                <input type="file" name="file" accept="image/*" required onchange="previewImage(this)">
-                <small>Поддерживаемые форматы: JPEG, PNG, GIF, WEBP</small>
-            </div>
-
-            <div id="imagePreview" class="image-preview">
-                <img id="previewImg" src="" alt="Preview">
-            </div>
-
-            <div style="display: flex; gap: 15px;">
-                <button type="submit" class="btn btn-primary">Загрузить</button>
-                <button type="button" class="btn btn-secondary" onclick="toggleUploadForm()">Отмена</button>
-            </div>
-        </form>
-    </div>
-    {% endif %}
-
-    <!-- Вкладки фильтрации -->
-    <div class="tab-buttons">
-        <button class="tab-btn active" onclick="filterGallery('all')">📷 Все фото</button>
-        <button class="tab-btn" onclick="filterGallery('pool')">🏊 Бассейн</button>
-        <button class="tab-btn" onclick="filterGallery('coach')">🏊‍♂️ Тренеры</button>
-    </div>
-
-    <!-- Галерея -->
-    <div class="gallery-grid" id="galleryGrid">
-        {% for image in images %}
-        <div class="gallery-card" data-type="{{ image.image_type }}">
-            <img src="/static/uploads/gallery/{{ image.filename }}"
-                 alt="{{ image.title }}"
-                 class="gallery-image"
-                 onclick="openModal('/static/uploads/gallery/{{ image.filename }}', '{{ image.title }}', '{{ image.description }}')">
-            <div class="gallery-info">
-                <div class="gallery-title">{{ image.title }}</div>
-                {% if image.description %}
-                <div class="gallery-description">{{ image.description }}</div>
-                {% endif %}
-                <div class="gallery-meta">
-                    <span class="image-type-badge {% if image.image_type == 'pool' %}type-pool{% else %}type-coach{% endif %}">
-                        {% if image.image_type == 'pool' %}🏊 Бассейн{% else %}🏊‍♂️ {{ image.coach_name or 'Тренер' }}{% endif %}
-                    </span>
-                    <span>📅 {{ image.created_at }}</span>
-                </div>
-                {% if user and user.role == 'admin' %}
-                <div class="admin-actions">
-                    <form method="POST" action="/gallery/{{ image.id }}/delete" style="display: inline;" onsubmit="return confirm('Удалить это фото?')">
-                        <button type="submit" class="btn btn-sm btn-danger">🗑️ Удалить</button>
-                    </form>
-                </div>
-                {% endif %}
-            </div>
         </div>
-        {% endfor %}
-    </div>
 
-    {% if not images %}
-    <div class="empty-gallery">
-        <div class="empty-gallery-icon">🖼️</div>
-        <h3>Фотогалерея пуста</h3>
-        <p>Здесь будут появляться фотографии бассейна и тренеров</p>
-        {% if user and user.role == 'admin' %}
-        <button class="btn btn-primary" onclick="toggleUploadForm()" style="margin-top: 20px;">➕ Добавить первое фото</button>
-        {% endif %}
+        <div class="form-group" id="coachSelect" style="display: none;">
+            <label>Тренер</label>
+            <select name="coach_id">
+                <option value="">Выберите тренера</option>
+                {% for coach in coaches %}
+                <option value="{{ coach.id }}">{{ coach.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Описание</label>
+            <textarea name="description" rows="3" placeholder="Краткое описание фото..."></textarea>
+        </div>
+
+        <div class="form-group">
+            <label class="required">Файл</label>
+            <input type="file" name="file" accept="image/*" required onchange="previewImage(this)">
+            <small>Поддерживаемые форматы: JPEG, PNG, GIF, WEBP</small>
+        </div>
+
+        <div id="imagePreview" class="image-preview">
+            <img id="previewImg" src="" alt="Preview">
+        </div>
+
+        <div style="display: flex; gap: 15px;">
+            <button type="submit" class="btn btn-primary">Загрузить</button>
+            <button type="button" class="btn btn-secondary" onclick="toggleUploadForm()">Отмена</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<!-- Вкладки фильтрации -->
+<div class="tab-buttons">
+    <button class="tab-btn active" onclick="filterGallery('all')">📷 Все фото</button>
+    <button class="tab-btn" onclick="filterGallery('pool')">🏊 Бассейн</button>
+    <button class="tab-btn" onclick="filterGallery('coach')">🏊‍♂️ Тренеры</button>
+</div>
+
+<!-- Галерея -->
+<div class="gallery-grid" id="galleryGrid">
+    {% for image in images %}
+    <div class="gallery-card" data-type="{{ image.image_type }}">
+        <img src="/static/uploads/gallery/{{ image.filename }}"
+             alt="{{ image.title }}"
+             class="gallery-image"
+             onclick="openModal('/static/uploads/gallery/{{ image.filename }}', '{{ image.title }}', '{{ image.description }}')">
+        <div class="gallery-info">
+            <div class="gallery-title">{{ image.title }}</div>
+            {% if image.description %}
+            <div class="gallery-description">{{ image.description }}</div>
+            {% endif %}
+            <div class="gallery-meta">
+                <span class="image-type-badge {% if image.image_type == 'pool' %}type-pool{% else %}type-coach{% endif %}">
+                    {% if image.image_type == 'pool' %}🏊 Бассейн{% else %}🏊‍♂️ {{ image.coach_name or 'Тренер' }}{% endif %}
+                </span>
+                <span>📅 {{ image.created_at }}</span>
+            </div>
+            {% if user and user.role == 'admin' %}
+            <div class="admin-actions">
+                <form method="POST" action="/gallery/{{ image.id }}/delete" style="display: inline;" onsubmit="return confirm('Удалить это фото?')">
+                    <button type="submit" class="btn btn-sm btn-danger">🗑️ Удалить</button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
     </div>
+    {% endfor %}
+</div>
+
+{% if not images %}
+<div class="empty-gallery">
+    <div class="empty-gallery-icon">🖼️</div>
+    <h3>Фотогалерея пуста</h3>
+    <p>Здесь будут появляться фотографии бассейна и тренеров</p>
+    {% if user and user.role == 'admin' %}
+    <button class="btn btn-primary" onclick="toggleUploadForm()" style="margin-top: 20px;">➕ Добавить первое фото</button>
     {% endif %}
 </div>
+{% endif %}
 
 <!-- Модальное окно для просмотра фото -->
 <div id="imageModal" class="modal" style="display: none;">
@@ -228,7 +179,6 @@
         });
     }
 
-    // Выбор типа фото для отображения выбора тренера
     const imageTypeSelect = document.getElementById('imageType');
     if (imageTypeSelect) {
         imageTypeSelect.addEventListener('change', function() {
@@ -237,7 +187,6 @@
         });
     }
 
-    // Закрытие модального окна по ESC
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             closeModal();

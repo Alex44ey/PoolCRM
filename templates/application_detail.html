@@ -3,29 +3,6 @@
 {% block title %}Заявка #{{ application.id }}{% endblock %}
 
 {% block content %}
-<div class="header">
-    <div class="logo">
-        <h1>🐬 Pool CRM</h1>
-        <p>Система управления бассейном</p>
-    </div>
-    <div class="user-info">
-        <span class="user-name">{{ user.name }}</span>
-        <span class="user-role">Администратор</span>
-        <a href="/logout" class="logout-btn">Выйти</a>
-    </div>
-</div>
-
-<div class="nav-menu">
-    <a href="/dashboard" class="nav-link">📊 Дашборд</a>
-    <a href="/gallery" class="nav-link">🖼️ Галерея</a>
-    <a href="/children" class="nav-link">👶 Дети</a>
-    <a href="/groups" class="nav-link">👥 Группы</a>
-    <a href="/trainers" class="nav-link">🏊‍♂️ Тренеры</a>
-    <a href="/trainings" class="nav-link">🏊 Тренировки</a>
-    <a href="/attendance" class="nav-link">📊 Посещаемость</a>
-    <a href="/applications" class="nav-link active">📋 Заявки</a>
-    <a href="/transfers" class="nav-link">🔄 Переводы</a>
-</div>
 
 <div class="content">
     <div class="action-bar">

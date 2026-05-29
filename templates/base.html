@@ -18,7 +18,57 @@
         <div class="bubbles"></div>
     </div>
 
+    <div class="container">
+        <!-- ШАПКА -->
+        <div class="header">
+            <div class="logo">
+                <h1>🐬 Pool CRM</h1>
+                <p>Система управления бассейном</p>
+            </div>
+            <div class="user-info">
+                <span class="user-name">{{ user.name }}</span>
+                <span class="user-role">
+                    {% if user.role == 'admin' %}Администратор
+                    {% elif user.role == 'coach' %}Тренер
+                    {% else %}Родитель{% endif %}
+                </span>
+                <a href="/logout" class="logout-btn">Выйти</a>
+            </div>
+        </div>
 
-    {% block content %}{% endblock %}
+        <!-- НАВИГАЦИЯ -->
+        <div class="nav-menu">
+            <a href="/dashboard" class="nav-link {% if request.url.path == '/dashboard' %}active{% endif %}">📊 Дашборд</a>
+            <a href="/gallery" class="nav-link {% if request.url.path == '/gallery' %}active{% endif %}">🖼️ Галерея</a>
+
+            {% if user.role == 'parent' %}
+            <a href="/children" class="nav-link {% if request.url.path == '/children' %}active{% endif %}">👶 Мои дети</a>
+            <a href="/profile" class="nav-link {% if request.url.path == '/profile' %}active{% endif %}">⚙️ Настройки</a>
+            {% endif %}
+
+            {% if user.role == 'coach' %}
+            <a href="/groups" class="nav-link {% if request.url.path == '/groups' %}active{% endif %}">👥 Мои группы</a>
+            <a href="/trainings" class="nav-link {% if request.url.path == '/trainings' %}active{% endif %}">🏊 Тренировки</a>
+            <a href="/attendance" class="nav-link {% if request.url.path == '/attendance' %}active{% endif %}">📊 Посещаемость</a>
+            <a href="/transfers" class="nav-link {% if request.url.path == '/transfers' %}active{% endif %}">🔄 Переводы</a>
+            {% endif %}
+
+            {% if user.role == 'admin' %}
+            <a href="/children" class="nav-link {% if request.url.path == '/children' %}active{% endif %}">👶 Дети</a>
+            <a href="/groups" class="nav-link {% if request.url.path == '/groups' %}active{% endif %}">👥 Группы</a>
+            <a href="/trainers" class="nav-link {% if request.url.path == '/trainers' %}active{% endif %}">🏊‍♂️ Тренеры</a>
+            <a href="/trainings" class="nav-link {% if request.url.path == '/trainings' %}active{% endif %}">🏊 Тренировки</a>
+            <a href="/attendance" class="nav-link {% if request.url.path == '/attendance' %}active{% endif %}">📊 Посещаемость</a>
+            <a href="/applications" class="nav-link {% if request.url.path == '/applications' or request.url.path.startswith('/applications/') %}active{% endif %}">📋 Заявки</a>
+            <a href="/transfers" class="nav-link {% if request.url.path == '/transfers' %}active{% endif %}">🔄 Переводы</a>
+            <a href="/admin/parents" class="nav-link {% if request.url.path == '/admin/parents' %}active{% endif %}">👨‍👩‍👧 Родители</a>
+            {% endif %}
+        </div>
+
+        <!-- КОНТЕНТ -->
+        <div class="content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
 </body>
 </html>

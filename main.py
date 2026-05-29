@@ -27,8 +27,7 @@ from database import (
     ApplicationStatus,GalleryImageDB
 )
 
-from fastapi.staticfiles import StaticFiles
-
+from vk_bot import start_vk_worker, stop_vk_worker
 
 # ========== НАСТРОЙКА ==========
 @asynccontextmanager
@@ -90,7 +89,7 @@ def get_current_user(request: Request, db: Session):
 
     # Для родителя получаем из БД
     if user_data["role"] == "parent":
-        user = db.query(ParentDB).filter(ParentDB.id == user_data["id"]).first()
+        user = db.query(ParentDB).filter(ParentDB.id == user_data["id"], ParentDB.is_active == True).first()
         if user:
             return {
                 "id": user.id,
@@ -1149,14 +1148,14 @@ async def save_attendance(
     user = get_current_user(request, db)
     if not user or user["role"] not in ["coach", "admin"]:
         return RedirectResponse(url="/dashboard")
-
     form_data = await request.form()
+
+    from vk_bot import send_attendance_notification_vk
 
     for key, value in form_data.items():
         if key.startswith("status_"):
             child_id = int(key.split("_")[1])
 
-            # Проверка, что тренировка принадлежит тренеру
             training = db.query(TrainingDB).filter(TrainingDB.id == training_id).first()
             if training:
                 group = db.query(GroupDB).filter(GroupDB.id == training.group_id).first()
@@ -1177,6 +1176,17 @@ async def save_attendance(
                             marked_by=f"coach_{user['id']}" if user["role"] == "coach" else "admin"
                         )
                         db.add(attendance)
+                    
+                    try:
+                        send_attendance_notification_vk(
+                            child_id=child_id,
+                            training_id=training_id,
+                            status=value,
+                            db=db
+                        )
+                    except Exception as e:
+                        print(f"Ошибка отправки VK уведомления: {e}")
+                        # Не прерываем выполнение, если уведомление не отправилось
 
     db.commit()
 
@@ -1184,7 +1194,6 @@ async def save_attendance(
 
 
 # ========== ЗАЯВКИ (АДМИН) ==========
-# main.py - найдите функцию applications_list и замените её на эту:
 
 @app.get("/applications", response_class=HTMLResponse)
 async def applications_list(

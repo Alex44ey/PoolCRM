@@ -14,16 +14,21 @@ from datetime import datetime, date, timedelta
 import random
 import string
 import os
-
+from fastapi import UploadFile, File
+import shutil
+from PIL import Image
+import hashlib
 from database import (
     engine, Base, SessionLocal, get_db,
     ParentDB, ChildDB, CoachDB, GroupDB, TimeSlotDB,
     EnrollmentDB, ApplicationDB, TrainingDB, AttendanceDB,
     TransferRequestDB, TransferHistoryDB, NotificationDB,
     UserRole, EnrollmentStatus, TrainingStatus, AttendanceStatus,
-    ApplicationStatus
+    ApplicationStatus,GalleryImageDB
 )
-from vk_bot import VK_ENABLED, start_vk_worker, get_bot_status
+
+from fastapi.staticfiles import StaticFiles
+
 
 # ========== НАСТРОЙКА ==========
 @asynccontextmanager
@@ -47,7 +52,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Pool CRM", version="1.0.0", lifespan=lifespan)
-
+app.mount("/static", StaticFiles(directory="static"), name="static")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -1892,6 +1897,175 @@ async def generate_vk_code(parent_id: int, db: Session = Depends(get_db)):
     return {"code": code, "expires_in": 600}
 
 
+# ========== ГАЛЕРЕЯ ==========
+
+# Создаём папки для галереи если их нет
+os.makedirs("static/uploads/gallery", exist_ok=True)
+os.makedirs("static/uploads/thumbs", exist_ok=True)
+
+
+def create_thumbnail(input_path, output_path, size=(300, 200)):
+    """Создание уменьшенной копии изображения"""
+    try:
+        with Image.open(input_path) as img:
+            # Конвертируем в RGB если нужно
+            if img.mode in ('RGBA', 'P'):
+                img = img.convert('RGB')
+            img.thumbnail(size, Image.Resampling.LANCZOS)
+            img.save(output_path, 'JPEG', quality=85)
+            return True
+    except Exception as e:
+        print(f"Ошибка создания миниатюры: {e}")
+        return False
+
+
+@app.get("/gallery", response_class=HTMLResponse)
+async def gallery_page(request: Request, db: Session = Depends(get_db)):
+    """Страница галереи"""
+    user = get_current_user(request, db)
+
+    # Получаем все активные изображения
+    images = db.query(GalleryImageDB).filter(
+        GalleryImageDB.is_active == True
+    ).order_by(GalleryImageDB.sort_order, GalleryImageDB.created_at.desc()).all()
+
+    images_data = []
+    for img in images:
+        images_data.append({
+            "id": img.id,
+            "title": img.title,
+            "description": img.description,
+            "filename": img.filename,
+            "image_type": img.image_type,
+            "coach_name": img.coach.name if img.coach else None,
+            "created_at": img.created_at
+        })
+
+    # Для админа - тренеры для привязки фото
+    coaches = []
+    if user and user["role"] == "admin":
+        coaches = db.query(CoachDB).filter(CoachDB.is_active == True).all()
+
+    return templates.TemplateResponse("gallery.html", {
+        "request": request,
+        "user": user,
+        "images": images_data,
+        "coaches": coaches
+    })
+
+
+@app.post("/gallery/upload")
+async def upload_gallery_image(
+        request: Request,
+        title: str = Form(...),
+        description: str = Form(None),
+        image_type: str = Form(...),
+        coach_id: Optional[int] = Form(None),
+        file: UploadFile = File(...),
+        db: Session = Depends(get_db)
+):
+    """Загрузка изображения в галерею (только админ)"""
+    user = get_current_user(request, db)
+    if not user or user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
+
+    # Проверка типа файла
+    allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    if file.content_type not in allowed_types:
+        return RedirectResponse(url="/gallery?error=Неподдерживаемый формат файла", status_code=303)
+
+    # Генерируем уникальное имя файла
+    file_ext = file.filename.split('.')[-1].lower()
+    unique_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{hashlib.md5(file.filename.encode()).hexdigest()[:8]}.{file_ext}"
+
+    # Сохраняем оригинал
+    file_path = f"static/uploads/gallery/{unique_name}"
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # Создаём миниатюру
+    thumb_path = f"static/uploads/thumbs/{unique_name}"
+    create_thumbnail(file_path, thumb_path)
+
+    # Сохраняем в БД
+    gallery_image = GalleryImageDB(
+        title=title,
+        description=description,
+        filename=unique_name,
+        original_filename=file.filename,
+        file_size=os.path.getsize(file_path),
+        image_type=image_type,
+        coach_id=coach_id if coach_id and image_type == 'coach' else None,
+        created_by=user["name"],
+        is_active=True
+    )
+    db.add(gallery_image)
+    db.commit()
+
+    return RedirectResponse(url="/gallery?success=Изображение загружено", status_code=303)
+
+
+@app.post("/gallery/{image_id}/delete")
+async def delete_gallery_image(
+        request: Request,
+        image_id: int,
+        db: Session = Depends(get_db)
+):
+    """Удаление изображения (только админ)"""
+    user = get_current_user(request, db)
+    if not user or user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
+
+    image = db.query(GalleryImageDB).filter(GalleryImageDB.id == image_id).first()
+    if image:
+        # Удаляем файлы
+        file_path = f"static/uploads/gallery/{image.filename}"
+        thumb_path = f"static/uploads/thumbs/{image.filename}"
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        if os.path.exists(thumb_path):
+            os.remove(thumb_path)
+
+        # Удаляем из БД
+        db.delete(image)
+        db.commit()
+
+    return RedirectResponse(url="/gallery?success=Изображение удалено", status_code=303)
+
+
+@app.post("/gallery/{image_id}/reorder")
+async def reorder_gallery_image(
+        request: Request,
+        image_id: int,
+        action: str = Form(...),  # 'up' или 'down'
+        db: Session = Depends(get_db)
+):
+    """Изменение порядка изображений (только админ)"""
+    user = get_current_user(request, db)
+    if not user or user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Доступ запрещён")
+
+    image = db.query(GalleryImageDB).filter(GalleryImageDB.id == image_id).first()
+    if not image:
+        return RedirectResponse(url="/gallery?error=Изображение не найдено", status_code=303)
+
+    if action == 'up':
+        # Меняем порядок с предыдущим
+        prev = db.query(GalleryImageDB).filter(
+            GalleryImageDB.sort_order < image.sort_order
+        ).order_by(GalleryImageDB.sort_order.desc()).first()
+        if prev:
+            prev.sort_order, image.sort_order = image.sort_order, prev.sort_order
+    elif action == 'down':
+        # Меняем порядок со следующим
+        next_img = db.query(GalleryImageDB).filter(
+            GalleryImageDB.sort_order > image.sort_order
+        ).order_by(GalleryImageDB.sort_order.asc()).first()
+        if next_img:
+            next_img.sort_order, image.sort_order = image.sort_order, next_img.sort_order
+
+    db.commit()
+    return RedirectResponse(url="/gallery", status_code=303)
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
     import uvicorn

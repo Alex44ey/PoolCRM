@@ -75,7 +75,6 @@ class ParentDB(Base):
 
 
 # ========== ТАБЛИЦА ДЕТЕЙ ==========
-# database.py - в классе ChildDB добавьте:
 
 class ChildDB(Base):
     __tablename__ = "children"
@@ -97,8 +96,23 @@ class ChildDB(Base):
     transfer_requests = relationship("TransferRequestDB", back_populates="child")
     applications = relationship("ApplicationDB", back_populates="child")  # <-- ДОБАВИТЬ
 
+# ========== ТАБЛИЦА ТРЕНЕРОВ ==========
+class CoachDB(Base):
+    __tablename__ = "coaches"
 
-# database.py - добавьте новый класс в конец файла перед Base.metadata.create_all
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, unique=True, nullable=False)
+    phone = Column(String)
+    password = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
+
+    groups = relationship("GroupDB", back_populates="coach")
+    transfer_requests = relationship("TransferRequestDB", back_populates="coach")
+    gallery_images = relationship("GalleryImageDB", back_populates="coach")
+
+# ========== ГАЛЕРЕЯ ==========
 
 class GalleryImageDB(Base):
     __tablename__ = "gallery_images"
@@ -118,22 +132,6 @@ class GalleryImageDB(Base):
 
     # Связь с тренером
     coach = relationship("CoachDB", back_populates="gallery_images")
-
-# ========== ТАБЛИЦА ТРЕНЕРОВ ==========
-class CoachDB(Base):
-    __tablename__ = "coaches"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    email = Column(String, unique=True, nullable=False)
-    phone = Column(String)
-    password = Column(String, nullable=False)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(String, default=lambda: datetime.now().strftime("%d.%m.%Y %H:%M"))
-
-    groups = relationship("GroupDB", back_populates="coach")
-    transfer_requests = relationship("TransferRequestDB", back_populates="coach")
-    gallery_images = relationship("GalleryImageDB", back_populates="coach")
 
 # ========== ТАБЛИЦА ГРУПП ==========
 class GroupDB(Base):

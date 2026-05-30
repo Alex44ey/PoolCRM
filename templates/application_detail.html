@@ -2,16 +2,71 @@
 
 {% block title %}Заявка #{{ application.id }}{% endblock %}
 
-{% block content %}
+{% block extra_css %}
+<style>
+    .password-box {
+        background: #e8f5e9;
+        border: 2px solid #4caf50;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 25px;
+        text-align: center;
+    }
+    .password-code {
+        font-size: 32px;
+        font-weight: bold;
+        letter-spacing: 3px;
+        background: #fff;
+        padding: 10px 25px;
+        border-radius: 10px;
+        display: inline-block;
+        font-family: monospace;
+        color: #2e7d32;
+        margin: 10px 0;
+    }
+    .copy-btn {
+        background: #1a6d8f;
+        color: white;
+        border: none;
+        padding: 6px 18px;
+        border-radius: 6px;
+        cursor: pointer;
+        margin-left: 12px;
+        font-size: 14px;
+    }
+    .copy-btn:hover {
+        background: #0d4b64;
+    }
+</style>
+{% endblock %}
 
+{% block content %}
 <div class="content">
     <div class="action-bar">
         <h2>Заявка #{{ application.id }}</h2>
         <a href="/applications" class="btn btn-secondary">← Назад к списку</a>
     </div>
 
-    {% if success %}
-    <div class="alert alert-success">{{ success }}</div>
+    {% if request.query_params.get('success') %}
+    <div class="alert alert-success" style="white-space: pre-line;">
+        {{ request.query_params.get('success') }}
+    </div>
+    {% endif %}
+
+    {% set password = request.query_params.get('password') %}
+    {% if password %}
+    <div class="password-box">
+        <h3>🎉 Новая учётная запись создана!</h3>
+        <p><strong>Родитель:</strong> {{ application.public_parent_name or application.parent_name }}</p>
+        <p><strong>Email для входа:</strong> {{ application.public_parent_email or application.parent_email }}</p>
+        <p><strong>Пароль:</strong>
+            <span class="password-code">{{ password }}</span>
+            <button class="copy-btn" onclick="copyPassword('{{ password }}')">📋 Копировать</button>
+        </p>
+        <div class="alert alert-warning" style="margin-top: 12px; padding: 8px;">
+            ⚠️ <strong>Важно!</strong> Сообщите пароль родителю. Он не будет показан повторно!
+        </div>
+    </div>
     {% endif %}
 
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
@@ -30,7 +85,7 @@
             <p><strong>Дата рождения:</strong> {{ application.child_birthdate or application.public_child_birthdate }}</p>
             <p><strong>Класс:</strong> {{ application.child_class or application.public_child_class or '-' }}</p>
             <p><strong>Год обучения:</strong> {{ application.child_study_year or application.public_child_study_year or '-' }}</p>
-            <p><strong>Мед. справка:</strong> 
+            <p><strong>Мед. справка:</strong>
                 {% if application.medical_cert_date or application.public_child_medical_date %}
                     ✅ Да ({{ application.medical_cert_date or application.public_child_medical_date }})
                 {% else %}
@@ -48,7 +103,7 @@
         <p><strong>Уровень:</strong> {{ application.group_level }}</p>
         <p><strong>Заполненность:</strong> {{ application.group_current_enrollment }}/{{ application.group_max_capacity }}</p>
         <p><strong>Тренер:</strong> {{ application.group_coach_name or 'Не назначен' }}</p>
-        
+
         {% if application.group_is_full %}
         <div class="alert alert-warning" style="margin-top: 10px;">⚠️ Группа заполнена</div>
         {% endif %}
@@ -74,4 +129,11 @@
         <button type="submit" class="btn btn-primary">Сохранить комментарий</button>
     </form>
 </div>
+
+<script>
+    function copyPassword(password) {
+        navigator.clipboard.writeText(password);
+        alert('Пароль скопирован в буфер обмена: ' + password);
+    }
+</script>
 {% endblock %}

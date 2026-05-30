@@ -18,6 +18,7 @@
             <th>ФИО</th>
             <th>Email</th>
             <th>Телефон</th>
+            <th>Пароль</th>
             <th>Детей</th>
             <th>VK</th>
             <th>Дата регистрации</th>
@@ -31,6 +32,12 @@
             <td>{{ parent.name }}</td>
             <td>{{ parent.email }}</td>
             <td>{{ parent.phone or '-' }}</td>
+            <td>
+                <span style="font-family: monospace; cursor: pointer;" onclick="copyToClipboard('{{ parent.password }}')" title="Нажмите, чтобы скопировать">
+                    {{ parent.password }}
+                </span>
+                <button class="btn btn-sm btn-secondary" onclick="copyToClipboard('{{ parent.password }}')">📋 Копировать</button>
+            </td>
             <td>{{ parent.children_count }}</td>
             <td>
                 {% if parent.is_vk_linked %}
@@ -41,8 +48,8 @@
             </td>
             <td>{{ parent.created_at }}</td>
             <td>
-                <a href="/parents/{{ parent.id }}/delete" 
-                   class="btn btn-sm btn-danger" 
+                <a href="/parents/{{ parent.id }}/delete"
+                   class="btn btn-sm btn-danger"
                    onclick="return confirm('Удалить родителя {{ parent.name }}? Все его дети также будут деактивированы.')">
                     🗑️ Удалить
                 </a>
@@ -51,4 +58,11 @@
         {% endfor %}
     </tbody>
 </table>
+
+<script>
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text);
+    alert('Пароль скопирован: ' + text);
+}
+</script>
 {% endblock %}

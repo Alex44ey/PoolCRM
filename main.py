@@ -1012,26 +1012,51 @@ async def save_attendance(request: Request, training_id: int = Form(...), db: Se
     user = get_current_user(request, db)
     if not user or user["role"] not in ["coach", "admin"]:
         return RedirectResponse(url="/dashboard")
+
+    # 1. Проверяем, существует ли тренировка и есть ли у пользователя права
+    training = db.query(TrainingDB).filter(TrainingDB.id == training_id).first()
+    if not training:
+        return RedirectResponse(url="/attendance?error=Тренировка не найдена", status_code=303)
+
+    group = db.query(GroupDB).filter(GroupDB.id == training.group_id).first()
+    if user["role"] != "admin" and (not group or group.coach_id != user["id"]):
+        return RedirectResponse(url="/attendance?error=Доступ запрещён", status_code=303)
+
     form_data = await request.form()
-    from vk_bot import send_attendance_notification_vk
     for key, value in form_data.items():
         if key.startswith("status_"):
             child_id = int(key.split("_")[1])
-            training = db.query(TrainingDB).filter(TrainingDB.id == training_id).first()
-            if training:
-                group = db.query(GroupDB).filter(GroupDB.id == training.group_id).first()
-                if group and (user["role"] == "admin" or group.coach_id == user["id"]):
-                    existing = db.query(AttendanceDB).filter(AttendanceDB.training_id == training_id, AttendanceDB.child_id == child_id).first()
-                    if existing:
-                        existing.status = value
-                        existing.marked_at = datetime.now().strftime("%d.%m.%Y %H:%M")
-                    else:
-                        attendance = AttendanceDB(training_id=training_id, child_id=child_id, status=value, marked_by=f"coach_{user['id']}" if user["role"] == "coach" else "admin")
-                        db.add(attendance)
+
+            # 2. Проверяем, есть ли уже запись о посещаемости
+            existing = db.query(AttendanceDB).filter(
+                AttendanceDB.training_id == training_id,
+                AttendanceDB.child_id == child_id
+            ).first()
+
+            # 3. Отправляем уведомление ТОЛЬКО если статус изменился
+            if existing:
+                if existing.status != value:   # статус изменился
+                    existing.status = value
+                    existing.marked_at = datetime.now().strftime("%d.%m.%Y %H:%M")
+                    # Отправляем уведомление (внутри функции проверяются настройки родителя и VK)
                     try:
                         send_attendance_notification_vk(child_id=child_id, training_id=training_id, status=value, db=db)
                     except Exception as e:
-                        print(f"Ошибка VK: {e}")
+                        print(f"Ошибка отправки VK уведомления: {e}")
+            else:
+                # Новая запись – всегда отправляем уведомление
+                attendance = AttendanceDB(
+                    training_id=training_id,
+                    child_id=child_id,
+                    status=value,
+                    marked_by=f"coach_{user['id']}" if user["role"] == "coach" else "admin"
+                )
+                db.add(attendance)
+                try:
+                    send_attendance_notification_vk(child_id=child_id, training_id=training_id, status=value, db=db)
+                except Exception as e:
+                    print(f"Ошибка отправки VK уведомления: {e}")
+
     db.commit()
     return RedirectResponse(url=f"/attendance?training_id={training_id}", status_code=303)
 
@@ -1082,7 +1107,7 @@ async def applications_list(request: Request, status: Optional[str] = Query(None
             "medical_note": medical_note, "group_name": app.group.name if app.group else "Unknown",
             "status": app.status.value if app.status else "new", "created_at": app.created_at, "group_is_full": group_is_full
         })
-    return templates.TemplateResponse(name="applications.html", request=request, context={"request": request, "user": user, "applications": apps_data, "filters": {"status": status}})
+    return templates.TemplateResponse(name="applications.html", request=request, context={"request": request, "user": user, "applications": apps_data, "filters": {"status": status}, "success": request.query_params.get('success')})
 
 
 @app.get("/applications/{app_id}")
@@ -1139,33 +1164,91 @@ async def application_detail(request: Request, app_id: int, db: Session = Depend
 
 
 @app.get("/applications/{app_id}/approve")
+@app.get("/applications/{app_id}/approve")
 async def approve_application(request: Request, app_id: int, db: Session = Depends(get_db)):
+    """Одобрение заявки (админ)"""
     user = get_current_user(request, db)
     if not user or user["role"] != "admin":
         return RedirectResponse(url="/dashboard")
+
     application = db.query(ApplicationDB).filter(ApplicationDB.id == app_id).first()
     if not application:
         return RedirectResponse(url="/applications")
+
     application.status = ApplicationStatus.APPROVED
+
     parent = None
+    generated_password = None
+
+    # Создаём родителя, если его нет
     if not application.parent_id and application.public_parent_email:
         parent = db.query(ParentDB).filter(ParentDB.email == application.public_parent_email).first()
         if not parent:
-            temp_password = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-            parent = ParentDB(name=application.public_parent_name, email=application.public_parent_email, phone=application.public_parent_phone, password=temp_password, is_active=True)
+            generated_password = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+            parent = ParentDB(
+                name=application.public_parent_name,
+                email=application.public_parent_email,
+                phone=application.public_parent_phone,
+                password=generated_password,
+                is_active=True
+            )
             db.add(parent)
             db.flush()
         application.parent_id = parent.id
+
+    # Создаём ребёнка, если его нет
     if not application.child_id and application.public_child_name:
-        child = ChildDB(parent_id=application.parent_id, name=application.public_child_name, birthdate=application.public_child_birthdate, class_num=application.public_child_class, study_year=application.public_child_study_year, medical_date=application.public_child_medical_date, medical_note=application.public_child_medical_note)
+        child = ChildDB(
+            parent_id=application.parent_id,
+            name=application.public_child_name,
+            birthdate=application.public_child_birthdate,
+            class_num=application.public_child_class,
+            study_year=application.public_child_study_year,
+            medical_date=application.public_child_medical_date,
+            medical_note=application.public_child_medical_note
+        )
         db.add(child)
         db.flush()
         application.child_id = child.id
+
+    # Создаём зачисление (с проверкой свободных мест)
     if application.child_id and application.group_id:
-        enrollment = EnrollmentDB(child_id=application.child_id, group_id=application.group_id, status=EnrollmentStatus.ACTIVE, start_date=date.today())
+        group = db.query(GroupDB).filter(GroupDB.id == application.group_id).first()
+        current_count = db.query(EnrollmentDB).filter(
+            EnrollmentDB.group_id == group.id,
+            EnrollmentDB.status == EnrollmentStatus.ACTIVE
+        ).count() if group else 0
+        if group and current_count < group.max_capacity:
+            enrollment = EnrollmentDB(
+                child_id=application.child_id,
+                group_id=application.group_id,
+                status=EnrollmentStatus.ACTIVE,
+                start_date=date.today()
+            )
+        else:
+            enrollment = EnrollmentDB(
+                child_id=application.child_id,
+                group_id=application.group_id,
+                status=EnrollmentStatus.WAITING_LIST,
+                start_date=date.today()
+            )
         db.add(enrollment)
+
     db.commit()
-    return RedirectResponse(url="/applications", status_code=303)
+
+    # Формируем сообщение для администратора
+    if generated_password:
+        success_message = f"✅ Заявка #{application.id} одобрена! Пароль для родителя: {generated_password}"
+        return RedirectResponse(
+            url=f"/applications/{app_id}?success={success_message}&password={generated_password}",
+            status_code=303
+        )
+    else:
+        success_message = f"✅ Заявка #{application.id} одобрена!"
+        return RedirectResponse(
+            url=f"/applications/{app_id}?success={success_message}",
+            status_code=303
+        )
 
 
 @app.get("/applications/{app_id}/reject")
@@ -1470,13 +1553,12 @@ async def reorder_gallery_image(request: Request, image_id: int, action: str = F
 
 @app.get("/admin/parents", response_class=HTMLResponse)
 async def admin_parents_list(request: Request, db: Session = Depends(get_db)):
-    """Список всех родителей (только для админа)"""
     user = get_current_user(request, db)
     if not user or user["role"] != "admin":
         return RedirectResponse(url="/dashboard")
-    
+
     parents = db.query(ParentDB).filter(ParentDB.is_active == True).all()
-    
+
     parents_data = []
     for parent in parents:
         children_count = db.query(ChildDB).filter(ChildDB.parent_id == parent.id, ChildDB.is_active == True).count()
@@ -1485,11 +1567,12 @@ async def admin_parents_list(request: Request, db: Session = Depends(get_db)):
             "name": parent.name,
             "email": parent.email,
             "phone": parent.phone,
+            "password": parent.password,  # <-- ОБЯЗАТЕЛЬНО
             "children_count": children_count,
             "is_vk_linked": parent.is_vk_linked,
             "created_at": parent.created_at
         })
-    
+
     return templates.TemplateResponse(
         name="admin_parents.html",
         request=request,

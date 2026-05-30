@@ -1,4 +1,4 @@
-```markdown
+
 # 🐬 Pool CRM - Система управления плавательным бассейном
 
 Полноценная CRM-система для управления детскими спортивными группами, расписанием, посещаемостью и коммуникацией с родителями через VK бота.
@@ -34,34 +34,26 @@
 - `уведомления вкл/выкл` - управление оповещениями
 - `помощь` - справка
 
-## 🚀 Быстрый старт
+## 🚀 Запуск
 
 ### 1. Клонирование и установка
-```bash
+```
 git clone https://github.com/your/pool-crm.git
 cd pool-crm
 pip install -r requirements.txt
 ```
 
-### 2. Настройка окружения
-```bash
-cp .env.example .env
-# Отредактируйте .env (VK токен, секретный ключ)
+### 2. Инициализация БД
 ```
-
-### 3. Инициализация БД
-```bash
 python seed_database.py   # Заполнение тестовыми данными
 ```
 
-### 4. Запуск
-```bash
-python main.py
-# Или
+### 3. Запуск
+```
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 5. Доступ к системе
+### 4. Доступ к системе
 - **Веб-интерфейс:** http://127.0.0.1:8000
 
 ## 🔑 Тестовые учётные записи
@@ -85,7 +77,6 @@ pool-crm/
 ├── vk_bot.py               # 🤖 VK Long Poll бот
 ├── seed_database.py        # 🌱 Заполнение тестовыми данными
 ├── requirements.txt        # 📦 Зависимости Python
-├── .env                    # 🔐 Переменные окружения (токены)
 ├── static/
 │   ├── style.css           # 🎨 Основные стили
 │   ├── bubbles.js          # 🫧 Анимация пузырьков
@@ -116,14 +107,13 @@ pool-crm/
 ## 🛠️ Технологии
 
 | Компонент | Технология |
-|-----------|------------|
-| Backend | FastAPI (Python 3.10+) |
+|-----------|-----------|
+| Backend | FastAPI (Python 3) |
 | ORM | SQLAlchemy 2.0+ |
 | База данных | SQLite |
 | Шаблоны | Jinja2 |
 | VK API | requests + Long Poll |
-| Фронтенд | HTML5, CSS3 (Flexbox/Grid), Vanilla JS |
-| Анимации | CSS Keyframes |
+| Фронтенд | HTML, CSS |
 
 ---
 
@@ -143,7 +133,7 @@ pool-crm/
 **Детали авторизации:**
 - Поддерживаются 3 роли: `admin`, `parent`, `coach`
 - Сессии хранятся в словаре `sessions` с cookie `session_id`
-- Админ: admin@pool.ru / admin123 (хардкод в login)
+- Админ: admin@pool.ru / admin123
 - Родители/тренеры: проверка по `ParentDB` / `CoachDB`
 
 ---

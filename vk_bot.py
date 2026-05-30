@@ -1,12 +1,8 @@
 # vk_bot.py
 """
 VK бот для уведомлений о посещаемости
-Полностью переписан с использованием корректного Long Poll API
 """
 
-import json
-import random
-import string
 import time
 import threading
 from datetime import datetime, timedelta
@@ -16,8 +12,8 @@ import requests
 from sqlalchemy.orm import Session
 
 from database import (
-    ParentDB, ChildDB, AttendanceDB, TrainingDB,
-    AttendanceStatus, EnrollmentDB, EnrollmentStatus, GroupDB
+    ParentDB, ChildDB, TrainingDB,
+    EnrollmentDB, EnrollmentStatus, GroupDB
 )
 
 # ========== НАСТРОЙКИ ==========

@@ -5,9 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from threading import Thread
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime, date, timedelta
 import random
 import string
@@ -19,15 +17,15 @@ import hashlib
 from pydantic import BaseModel, Field
 
 from database import (
-    engine, Base, SessionLocal, get_db,
+    engine, Base, get_db,
     ParentDB, ChildDB, CoachDB, GroupDB, TimeSlotDB,
     EnrollmentDB, ApplicationDB, TrainingDB, AttendanceDB,
-    TransferRequestDB, TransferHistoryDB, NotificationDB,
-    UserRole, EnrollmentStatus, TrainingStatus, AttendanceStatus,
+    TransferRequestDB, TransferHistoryDB,
+    EnrollmentStatus, TrainingStatus, AttendanceStatus,
     ApplicationStatus, GalleryImageDB
 )
 
-from vk_bot import start_vk_worker, stop_vk_worker
+from vk_bot import start_vk_worker
 
 
 # ========== PYDANTIC МОДЕЛИ ДЛЯ ВАЛИДАЦИИ ==========
